@@ -5,6 +5,9 @@ from typing import Any, Dict, Optional
 
 DEFAULT_BEAM_WIDTH_MM = 100.0
 DEFAULT_POINT_MM = 0.0
+DEFAULT_ROBOT_BLEND_RADIUS_MM = 0.001
+DEFAULT_ROBOT_VELOCITY = 0.03
+DEFAULT_ROBOT_ACCELERATION = 0.05
 PROJECT_VERSION = "1"
 
 
@@ -24,6 +27,9 @@ class FormProject:
     fixture_rx_deg: float = DEFAULT_POINT_MM
     fixture_ry_deg: float = DEFAULT_POINT_MM
     fixture_rz_deg: float = DEFAULT_POINT_MM
+    robot_blend_radius_mm: float = DEFAULT_ROBOT_BLEND_RADIUS_MM
+    robot_velocity: float = DEFAULT_ROBOT_VELOCITY
+    robot_acceleration: float = DEFAULT_ROBOT_ACCELERATION
     bottom_ring: Dict[str, Any] = field(default_factory=dict)
     top_ring: Dict[str, Any] = field(default_factory=dict)
     cylinder_wall: Dict[str, Any] = field(default_factory=dict)

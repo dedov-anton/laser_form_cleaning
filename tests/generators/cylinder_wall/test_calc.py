@@ -10,7 +10,7 @@ from src.generators.cylinder_wall.calc import (
     recommended_passes_per_sector,
     sector_pass_angles,
 )
-from src.generators.cylinder_wall.params import SECTOR_COUNT, CylinderWallParams
+from src.generators.cylinder_wall.params import SECTOR_COUNT, CylinderWallParams, WallProfileWaypoint
 
 
 class CylinderWallCalcTests(unittest.TestCase):
@@ -110,3 +110,49 @@ class CylinderWallCalcTests(unittest.TestCase):
         self.assertAlmostEqual(z_values[1], 500.0)
         for circle in circles:
             self.assertAlmostEqual(float(circle["radius_mm"]), 400.0)
+
+    def test_profile_adds_four_stops_per_pass(self) -> None:
+        params = self._params(
+            profile_point_1=WallProfileWaypoint(50.0, 10.0, 3.0),
+            profile_point_2=WallProfileWaypoint(150.0, 30.0, -4.0),
+        )
+        trajectory = build_trajectory(params)
+        self.assertEqual(len(trajectory.passes[0].stops), 4)
+
+    def test_profile_point_radius_and_z(self) -> None:
+        params = self._params(
+            profile_point_1=WallProfileWaypoint(80.0, 25.0, 0.0),
+        )
+        trajectory = build_trajectory(params)
+        profile_pose = next(
+            pose for pose in trajectory.poses if pose.pose_type == "work_profile_1"
+        )
+        radius = math.hypot(profile_pose.position[0], profile_pose.position[1])
+        self.assertAlmostEqual(radius, 375.0)
+        self.assertAlmostEqual(profile_pose.position[2], 420.0)
+
+    def test_profile_top_to_bottom_order(self) -> None:
+        params = self._params(
+            profile_point_1=WallProfileWaypoint(150.0, 0.0, 0.0),
+            profile_point_2=WallProfileWaypoint(50.0, 0.0, 0.0),
+        )
+        trajectory = build_trajectory(params)
+        z_values = [stop.position[2] for stop in trajectory.passes[0].stops]
+        self.assertEqual(z_values, [500.0, 450.0, 350.0, 300.0])
+
+    def test_profile_point_outward_radius(self) -> None:
+        params = self._params(
+            profile_point_1=WallProfileWaypoint(80.0, -15.0, 0.0),
+        )
+        trajectory = build_trajectory(params)
+        profile_pose = next(
+            pose for pose in trajectory.poses if pose.pose_type == "work_profile_1"
+        )
+        radius = math.hypot(profile_pose.position[0], profile_pose.position[1])
+        self.assertAlmostEqual(radius, 415.0)
+
+    def test_profile_z_down_validation(self) -> None:
+        with self.assertRaises(ValueError):
+            build_trajectory(
+                self._params(profile_point_1=WallProfileWaypoint(200.0, 0.0, 0.0))
+            )

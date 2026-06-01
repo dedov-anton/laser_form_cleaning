@@ -85,9 +85,12 @@ class TrajectoryApp(tk.Tk):
         def on_change() -> None:
             self.bottom_ring._update_derived_fields()
             self.bottom_ring._update_profile_preview()
+            self.cylinder_wall._update_derived_fields()
+            self.cylinder_wall._update_profile_preview()
 
         self.form_common.bind_updates(on_change)
         self.bottom_ring.bind_updates(on_change)
+        self.cylinder_wall.bind_updates(on_change)
 
     def _on_mousewheel(self, event: tk.Event) -> None:
         if event.delta and self._scroll_canvas.winfo_exists():

@@ -6,12 +6,13 @@ from src.generators.cylinder_wall.calc import (
     recommended_passes_per_sector,
 )
 from src.generators.cylinder_wall.generator import CylinderWallGenerator
-from src.generators.cylinder_wall.params import CylinderWallParams, SECTOR_COUNT
+from src.generators.cylinder_wall.params import CylinderWallParams, SECTOR_COUNT, WallProfileWaypoint
 
 __all__ = [
     "CylinderWallGenerator",
     "CylinderWallParams",
     "SECTOR_COUNT",
+    "WallProfileWaypoint",
     "build_trajectory",
     "overlap_per_sector",
     "overlap_percent",

@@ -10,6 +10,7 @@ from src.generators.cylinder_wall.params import (
     SECTOR_COUNT,
     SECTOR_WIDTH_DEG,
     CylinderWallParams,
+    WallProfileWaypoint,
 )
 
 VERTICAL_DOWN: Point3 = (0.0, 0.0, -1.0)
@@ -72,23 +73,60 @@ def ordered_sector_indices(start_sector: int, clockwise: bool) -> List[int]:
     return [(start_sector + offset) % SECTOR_COUNT for offset in range(SECTOR_COUNT)]
 
 
+def active_profile_waypoints(params: CylinderWallParams) -> List[WallProfileWaypoint]:
+    waypoints = [params.profile_point_1, params.profile_point_2]
+    return [waypoint for waypoint in waypoints if waypoint.z_down_mm > 0.0]
+
+
+def build_pass_stops(angle_deg: float, params: CylinderWallParams) -> List[PassStop]:
+    z_bottom = params.z_top_mm - params.wall_height_mm
+    profile_waypoints = sorted(active_profile_waypoints(params), key=lambda w: w.z_down_mm)
+
+    stops: List[PassStop] = [
+        PassStop(
+            position=polar_to_xyz(params.inner_radius_mm, angle_deg, params.z_top_mm),
+            pose_type="top",
+            tilt_deg=params.top_tilt_deg,
+        )
+    ]
+
+    for index, waypoint in enumerate(profile_waypoints, start=1):
+        radius_mm = params.inner_radius_mm - waypoint.radial_inward_mm
+        if radius_mm <= 0.0:
+            raise ValueError(
+                f"Промеж. точка {index}: смещение к оси слишком большое "
+                f"({waypoint.radial_inward_mm:.2f} мм, радиус ≤ 0)"
+            )
+        z_mm = params.z_top_mm - waypoint.z_down_mm
+        stops.append(
+            PassStop(
+                position=polar_to_xyz(radius_mm, angle_deg, z_mm),
+                pose_type=f"work_profile_{index}",
+                tilt_deg=waypoint.tilt_deg,
+            )
+        )
+
+    stops.append(
+        PassStop(
+            position=polar_to_xyz(params.inner_radius_mm, angle_deg, z_bottom),
+            pose_type="bottom",
+            tilt_deg=params.bottom_tilt_deg,
+        )
+    )
+    return stops
+
+
 def build_vertical_pass(
     index: int,
     sector_index: int,
     angle_deg: float,
     params: CylinderWallParams,
 ) -> VerticalPass:
-    z_bottom = params.z_top_mm - params.wall_height_mm
-    top = polar_to_xyz(params.inner_radius_mm, angle_deg, params.z_top_mm)
-    bottom = polar_to_xyz(params.inner_radius_mm, angle_deg, z_bottom)
     return VerticalPass(
         index=index,
         sector_index=sector_index,
         angle_deg=angle_deg,
-        stops=[
-            PassStop(top, "top", params.top_tilt_deg),
-            PassStop(bottom, "bottom", params.bottom_tilt_deg),
-        ],
+        stops=build_pass_stops(angle_deg, params),
     )
 
 
@@ -239,6 +277,22 @@ def build_trajectory(
 
     _validate_tilt("Наклон верхней точки", params.top_tilt_deg)
     _validate_tilt("Наклон нижней точки", params.bottom_tilt_deg)
+
+    for index, waypoint in enumerate((params.profile_point_1, params.profile_point_2), start=1):
+        _validate_tilt(f"Наклон промеж. точки {index}", waypoint.tilt_deg)
+        if waypoint.z_down_mm > 0.0:
+            if waypoint.z_down_mm >= params.wall_height_mm:
+                raise ValueError(
+                    f"Промеж. точка {index}: смещение вниз должно быть меньше "
+                    f"высоты стенки ({params.wall_height_mm:.2f} мм)"
+                )
+            if not math.isfinite(waypoint.radial_inward_mm):
+                raise ValueError(f"Промеж. точка {index}: некорректное смещение к оси")
+            if waypoint.radial_inward_mm >= params.inner_radius_mm:
+                raise ValueError(
+                    f"Промеж. точка {index}: смещение к оси должно быть меньше "
+                    f"внутр. радиуса ({params.inner_radius_mm:.2f} мм)"
+                )
 
     ordered_passes = order_processing_passes(params)
     travel_segments = build_travel_segments(ordered_passes, start_point_mm, finish_point_mm)

@@ -5,7 +5,14 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Optional
 
-from src.common.project import DEFAULT_BEAM_WIDTH_MM, DEFAULT_POINT_MM, FormProject
+from src.common.project import (
+    DEFAULT_BEAM_WIDTH_MM,
+    DEFAULT_POINT_MM,
+    DEFAULT_ROBOT_ACCELERATION,
+    DEFAULT_ROBOT_BLEND_RADIUS_MM,
+    DEFAULT_ROBOT_VELOCITY,
+    FormProject,
+)
 from src.generators.bottom_ring.params import ProfileWaypoint
 from src.storage.trajectory_codec import trajectory_from_dict, trajectory_to_dict
 
@@ -115,6 +122,13 @@ def load_project(project_root: Optional[Path] = None) -> FormProject:
         fixture_rx_deg=float(data.get("fixture_rx_deg", DEFAULT_POINT_MM)),
         fixture_ry_deg=float(data.get("fixture_ry_deg", DEFAULT_POINT_MM)),
         fixture_rz_deg=float(data.get("fixture_rz_deg", DEFAULT_POINT_MM)),
+        robot_blend_radius_mm=float(
+            data.get("robot_blend_radius_mm", DEFAULT_ROBOT_BLEND_RADIUS_MM)
+        ),
+        robot_velocity=float(data.get("robot_velocity", DEFAULT_ROBOT_VELOCITY)),
+        robot_acceleration=float(
+            data.get("robot_acceleration", DEFAULT_ROBOT_ACCELERATION)
+        ),
         bottom_ring=bottom_ring,
         top_ring=dict(data.get("top_ring", {})),
         cylinder_wall=dict(data.get("cylinder_wall", {})),

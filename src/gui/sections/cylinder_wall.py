@@ -1,19 +1,33 @@
 from __future__ import annotations
 
 import tkinter as tk
+from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import TYPE_CHECKING, Callable
 
-from src.exporters.robot.export import RobotExportNotImplementedError, export_robot_program
+from src.exporters.robot.export import export_robot_program
 from src.exporters.step.export import export_trajectory
 from src.generators.cylinder_wall.calc import (
     overlap_per_sector,
     overlap_percent,
     recommended_passes_per_sector,
 )
-from src.generators.cylinder_wall.params import SECTOR_COUNT, CylinderWallParams
+from src.generators.cylinder_wall.params import (
+    SECTOR_COUNT,
+    CylinderWallParams,
+    WallProfileWaypoint,
+)
 from src.generators.registry import get_generator
-from src.gui.parsing import format_number, parse_float, parse_positive_float, parse_positive_int, parse_tilt_deg
+from src.gui.parsing import (
+    format_number,
+    parse_float,
+    parse_optional_float,
+    parse_optional_non_negative_float,
+    parse_positive_float,
+    parse_positive_int,
+    parse_tilt_deg,
+)
+from src.gui.widgets.wall_profile_canvas import WallProfileCanvas
 from src.storage.project_store import store_local_trajectory, store_trajectory
 from src.transforms.trajectory_transform import transform_work_trajectory
 
@@ -46,6 +60,12 @@ class CylinderWallSection:
         self.clockwise_var = tk.BooleanVar(value=True)
         self.top_tilt_var = tk.StringVar(value="0")
         self.bottom_tilt_var = tk.StringVar(value="0")
+        self.profile1_down_var = tk.StringVar(value="0")
+        self.profile1_radial_var = tk.StringVar(value="0")
+        self.profile1_tilt_var = tk.StringVar(value="0")
+        self.profile2_down_var = tk.StringVar(value="0")
+        self.profile2_radial_var = tk.StringVar(value="0")
+        self.profile2_tilt_var = tk.StringVar(value="0")
         self.start_x_var = tk.StringVar(value="0")
         self.start_y_var = tk.StringVar(value="0")
         self.start_z_var = tk.StringVar(value="0")
@@ -105,12 +125,51 @@ class CylinderWallSection:
             variable=self.clockwise_var,
         ).pack(side=tk.LEFT)
 
-        tilt_frame = ttk.LabelFrame(frame, text="Наклон инструмента", padding=8)
-        tilt_frame.pack(fill=tk.X, pady=(0, 8))
-        tilt_row = ttk.Frame(tilt_frame)
-        tilt_row.pack(fill=tk.X)
-        self._add_inline_field(tilt_row, "Верх (°):", self.top_tilt_var, 0)
-        self._add_inline_field(tilt_row, "Низ (°):", self.bottom_tilt_var, 2)
+        profile_frame = ttk.LabelFrame(frame, text="Профиль / наклон", padding=8)
+        profile_frame.pack(fill=tk.X, pady=(0, 8))
+        profile_frame.columnconfigure(0, weight=1)
+        profile_frame.columnconfigure(1, weight=0)
+
+        fields = ttk.Frame(profile_frame)
+        fields.grid(row=0, column=0, sticky=tk.NSEW, padx=(0, 8))
+
+        edges = ttk.Frame(fields)
+        edges.pack(fill=tk.X, pady=(0, 6))
+        self._add_inline_field(edges, "Верх. наклон (°):", self.top_tilt_var, 0)
+        self._add_inline_field(edges, "Низ. наклон (°):", self.bottom_tilt_var, 2)
+
+        mid_row = ttk.Frame(fields)
+        mid_row.pack(fill=tk.X)
+        mid_row.columnconfigure(0, weight=1)
+        mid_row.columnconfigure(1, weight=1)
+        self._build_midpoint_block(
+            mid_row,
+            0,
+            "Промеж. 1",
+            self.profile1_down_var,
+            self.profile1_radial_var,
+            self.profile1_tilt_var,
+        )
+        self._build_midpoint_block(
+            mid_row,
+            1,
+            "Промеж. 2",
+            self.profile2_down_var,
+            self.profile2_radial_var,
+            self.profile2_tilt_var,
+        )
+        ttk.Label(
+            fields,
+            text="+ — к оси, − — наружу от стенки. Вниз=0 — точка выкл.",
+            wraplength=420,
+        ).pack(anchor=tk.W, pady=(6, 0))
+
+        preview_frame = ttk.Frame(profile_frame)
+        preview_frame.grid(row=0, column=1, sticky=tk.N)
+        ttk.Label(preview_frame, text="Сечение стенки").pack(anchor=tk.W)
+        self.profile_canvas = WallProfileCanvas(preview_frame)
+        self.profile_canvas.pack()
+        self.profile_canvas.bind("<Configure>", lambda _e: self._update_profile_preview())
 
         points_frame = ttk.LabelFrame(frame, text="Старт / финиш (мм)", padding=8)
         points_frame.pack(fill=tk.X, pady=(0, 8))
@@ -146,6 +205,21 @@ class CylinderWallSection:
         )
         self.export_robot_button.pack(side=tk.LEFT)
         ttk.Label(frame, textvariable=self.status_var).pack(anchor=tk.W)
+
+    def _build_midpoint_block(
+        self,
+        parent: ttk.Frame,
+        column: int,
+        title: str,
+        down_var: tk.StringVar,
+        radial_var: tk.StringVar,
+        tilt_var: tk.StringVar,
+    ) -> None:
+        block = ttk.LabelFrame(parent, text=title, padding=6)
+        block.grid(row=0, column=column, sticky=tk.NSEW, padx=(0 if column == 0 else 4, 0))
+        self._add_labeled_entry(block, 0, "Вниз (мм):", down_var, entry_width=8)
+        self._add_labeled_entry(block, 1, "К оси (мм):", radial_var, entry_width=8)
+        self._add_labeled_entry(block, 2, "Наклон (°):", tilt_var, entry_width=8)
 
     def _add_inline_field(
         self,
@@ -183,6 +257,12 @@ class CylinderWallSection:
             self.passes_per_sector_var,
             self.top_tilt_var,
             self.bottom_tilt_var,
+            self.profile1_down_var,
+            self.profile1_radial_var,
+            self.profile1_tilt_var,
+            self.profile2_down_var,
+            self.profile2_radial_var,
+            self.profile2_tilt_var,
             self.start_x_var,
             self.start_y_var,
             self.start_z_var,
@@ -204,6 +284,8 @@ class CylinderWallSection:
             self.z_top_var.set(format_number(float(data["z_top_mm"])))
         self.top_tilt_var.set(format_number(float(data.get("top_tilt_deg", 0.0))))
         self.bottom_tilt_var.set(format_number(float(data.get("bottom_tilt_deg", 0.0))))
+        self._load_profile_waypoint(data.get("profile_point_1", {}), 1)
+        self._load_profile_waypoint(data.get("profile_point_2", {}), 2)
         self.clockwise_var.set(bool(data.get("clockwise", True)))
 
         start_sector = int(data.get("start_sector", 0))
@@ -239,6 +321,69 @@ class CylinderWallSection:
             self.status_var.set(self._format_status(trajectory) + suffix)
 
         self._update_derived_fields()
+        self._update_profile_preview()
+
+    def _load_profile_waypoint(self, data: dict, index: int) -> None:
+        vars_ = (
+            (self.profile1_down_var, self.profile1_radial_var, self.profile1_tilt_var)
+            if index == 1
+            else (self.profile2_down_var, self.profile2_radial_var, self.profile2_tilt_var)
+        )
+        vars_[0].set(format_number(float(data.get("z_down_mm", 0.0))))
+        vars_[1].set(format_number(float(data.get("radial_inward_mm", 0.0))))
+        vars_[2].set(format_number(float(data.get("tilt_deg", 0.0))))
+
+    def _read_profile_waypoint(self, index: int) -> WallProfileWaypoint:
+        prefix = f"Промеж. точка {index}"
+        if index == 1:
+            down_var, radial_var, tilt_var = (
+                self.profile1_down_var,
+                self.profile1_radial_var,
+                self.profile1_tilt_var,
+            )
+        else:
+            down_var, radial_var, tilt_var = (
+                self.profile2_down_var,
+                self.profile2_radial_var,
+                self.profile2_tilt_var,
+            )
+        return WallProfileWaypoint(
+            z_down_mm=parse_optional_non_negative_float(down_var.get(), f"{prefix}, вниз"),
+            radial_inward_mm=parse_optional_float(radial_var.get(), f"{prefix}, к оси"),
+            tilt_deg=parse_tilt_deg(tilt_var.get(), f"{prefix}, наклон"),
+        )
+
+    def _update_profile_preview(self) -> None:
+        try:
+            wall_height = parse_positive_float(self.wall_height_var.get(), "Высота стенки")
+            inner_radius = parse_positive_float(self.inner_radius_var.get(), "Внутренний радиус")
+        except ValueError:
+            self.profile_canvas.draw_profile(
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                WallProfileWaypoint(),
+                WallProfileWaypoint(),
+            )
+            return
+
+        try:
+            top_tilt = parse_tilt_deg(self.top_tilt_var.get(), "Наклон верхней точки")
+            bottom_tilt = parse_tilt_deg(self.bottom_tilt_var.get(), "Наклон нижней точки")
+            profile1 = self._read_profile_waypoint(1)
+            profile2 = self._read_profile_waypoint(2)
+        except ValueError:
+            return
+
+        self.profile_canvas.draw_profile(
+            wall_height,
+            inner_radius,
+            top_tilt,
+            bottom_tilt,
+            profile1,
+            profile2,
+        )
 
     def save_params_to_project(self) -> None:
         params = self._read_params(require_passes=True)
@@ -300,6 +445,8 @@ class CylinderWallSection:
             clockwise=bool(self.clockwise_var.get()),
             top_tilt_deg=parse_tilt_deg(self.top_tilt_var.get(), "Наклон верхней точки"),
             bottom_tilt_deg=parse_tilt_deg(self.bottom_tilt_var.get(), "Наклон нижней точки"),
+            profile_point_1=self._read_profile_waypoint(1),
+            profile_point_2=self._read_profile_waypoint(2),
         )
 
     def _apply_recommended_passes(self, silent: bool = False) -> None:
@@ -378,6 +525,7 @@ class CylinderWallSection:
         self._set_export_state(True)
         self.move_pose_button.configure(state=tk.NORMAL)
         self._update_derived_fields()
+        self._update_profile_preview()
 
     def _move_by_fixture_pose(self) -> None:
         local = self.app.get_local_trajectory(self.generator_id)
@@ -450,11 +598,10 @@ class CylinderWallSection:
             return
 
         try:
-            export_robot_program(trajectory, filepath)
-        except RobotExportNotImplementedError:
-            messagebox.showinfo(
-                "Создать УП",
-                "Экспорт управляющей программы — следующий этап разработки.",
-            )
+            settings = self.app.form_common.robot_export_settings()
+            export_robot_program(trajectory, Path(filepath), settings)
         except Exception as error:
             messagebox.showerror("Создать УП", str(error))
+            return
+
+        messagebox.showinfo("Создать УП", f"Файл сохранён:\n{filepath}")

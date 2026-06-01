@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import tkinter as tk
+from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import TYPE_CHECKING, Callable, Optional
 
-from src.exporters.robot.export import RobotExportNotImplementedError, export_robot_program
+from src.exporters.robot.export import export_robot_program
 from src.exporters.step.export import export_trajectory
 from src.generators.bottom_ring.params import BottomRingParams, ProfileWaypoint
 from src.generators.bottom_ring.calc import (
@@ -561,11 +562,10 @@ class BottomRingSection:
             return
 
         try:
-            export_robot_program(trajectory, filepath)
-        except RobotExportNotImplementedError:
-            messagebox.showinfo(
-                "Создать УП",
-                "Экспорт управляющей программы — следующий этап разработки.",
-            )
+            settings = self.app.form_common.robot_export_settings()
+            export_robot_program(trajectory, Path(filepath), settings)
         except Exception as error:
             messagebox.showerror("Создать УП", str(error))
+            return
+
+        messagebox.showinfo("Создать УП", f"Файл сохранён:\n{filepath}")

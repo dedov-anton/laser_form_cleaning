@@ -5,6 +5,7 @@ from tkinter import ttk
 from typing import TYPE_CHECKING, Callable
 
 from src.common.frame_pose import FramePose6D
+from src.exporters.robot.settings import RobotExportSettings
 from src.gui.parsing import format_number, parse_float
 
 if TYPE_CHECKING:
@@ -21,6 +22,9 @@ class FormCommonSection:
         self.fixture_rx_var = tk.StringVar(value="0")
         self.fixture_ry_var = tk.StringVar(value="0")
         self.fixture_rz_var = tk.StringVar(value="0")
+        self.robot_blend_var = tk.StringVar(value="0.001")
+        self.robot_velocity_var = tk.StringVar(value="0.03")
+        self.robot_acceleration_var = tk.StringVar(value="0.05")
         self._build(parent)
 
     def _build(self, parent: ttk.Frame) -> None:
@@ -32,6 +36,14 @@ class FormCommonSection:
         ttk.Label(row, text="Ширина луча (мм):").pack(side=tk.LEFT)
         ttk.Entry(row, textvariable=self.beam_width_var, width=10).pack(side=tk.LEFT, padx=(8, 24))
         ttk.Label(row, text="(общая для всех поверхностей)").pack(side=tk.LEFT)
+
+        robot = ttk.LabelFrame(frame, text="Параметры УП (Elite)", padding=6)
+        robot.pack(fill=tk.X, pady=(8, 0))
+        robot_row = ttk.Frame(robot)
+        robot_row.pack(fill=tk.X, pady=2)
+        self._inline(robot_row, "Blend (м):", self.robot_blend_var, 0, width=8)
+        self._inline(robot_row, "v (м/с):", self.robot_velocity_var, 2, width=8)
+        self._inline(robot_row, "a (м/с²):", self.robot_acceleration_var, 4, width=8)
 
         fixture = ttk.LabelFrame(frame, text="Поза матрицы / базы (мм, °)", padding=6)
         fixture.pack(fill=tk.X, pady=(8, 0))
@@ -73,6 +85,9 @@ class FormCommonSection:
             self.fixture_rx_var,
             self.fixture_ry_var,
             self.fixture_rz_var,
+            self.robot_blend_var,
+            self.robot_velocity_var,
+            self.robot_acceleration_var,
         ):
             variable.trace_add("write", lambda *_args: callback())
 
@@ -89,6 +104,13 @@ class FormCommonSection:
             rz_deg=parse_float(self.fixture_rz_var.get(), "Поза Rz"),
         )
 
+    def robot_export_settings(self) -> RobotExportSettings:
+        return RobotExportSettings(
+            blend_radius_mm=parse_float(self.robot_blend_var.get(), "Радиус скругления"),
+            velocity=parse_float(self.robot_velocity_var.get(), "Скорость v"),
+            acceleration=parse_float(self.robot_acceleration_var.get(), "Ускорение a"),
+        )
+
     def load_from_project(self) -> None:
         project = self.app.project
         self.beam_width_var.set(format_number(project.beam_width_mm))
@@ -98,6 +120,9 @@ class FormCommonSection:
         self.fixture_rx_var.set(format_number(project.fixture_rx_deg))
         self.fixture_ry_var.set(format_number(project.fixture_ry_deg))
         self.fixture_rz_var.set(format_number(project.fixture_rz_deg))
+        self.robot_blend_var.set(format_number(project.robot_blend_radius_mm))
+        self.robot_velocity_var.set(format_number(project.robot_velocity))
+        self.robot_acceleration_var.set(format_number(project.robot_acceleration))
 
     def save_to_project(self) -> None:
         project = self.app.project
@@ -109,6 +134,10 @@ class FormCommonSection:
         project.fixture_rx_deg = pose.rx_deg
         project.fixture_ry_deg = pose.ry_deg
         project.fixture_rz_deg = pose.rz_deg
+        robot = self.robot_export_settings()
+        project.robot_blend_radius_mm = robot.blend_radius_mm
+        project.robot_velocity = robot.velocity
+        project.robot_acceleration = robot.acceleration
 
     def save_fixture_pose_to_project(self) -> None:
         pose = self.fixture_pose()
