@@ -64,3 +64,24 @@ class ProjectStoreTests(unittest.TestCase):
             project = load_project(root)
             self.assertEqual(project.bottom_ring.get("inner_radius_mm"), 200.0)
             self.assertEqual(project.beam_width_mm, 100.0)
+
+    def test_migrate_start_finish_to_bottom_ring(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config = root / "config"
+            config.mkdir()
+            project_data = {
+                "beam_width_mm": 100.0,
+                "start_x_mm": 1.0,
+                "start_y_mm": 2.0,
+                "start_z_mm": 3.0,
+                "finish_x_mm": 4.0,
+                "finish_y_mm": 5.0,
+                "finish_z_mm": 6.0,
+                "bottom_ring": {"inner_radius_mm": 500.0},
+            }
+            (config / "project.json").write_text(json.dumps(project_data), encoding="utf-8")
+
+            project = load_project(root)
+            self.assertEqual(project.bottom_ring.get("start_x_mm"), 1.0)
+            self.assertEqual(project.bottom_ring.get("finish_z_mm"), 6.0)

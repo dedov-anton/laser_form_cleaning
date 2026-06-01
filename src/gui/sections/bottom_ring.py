@@ -15,6 +15,7 @@ from src.generators.bottom_ring.calc import (
 from src.generators.registry import get_generator
 from src.gui.parsing import (
     format_number,
+    parse_float,
     parse_optional_angle,
     parse_optional_float,
     parse_optional_non_negative_float,
@@ -52,6 +53,12 @@ class BottomRingSection:
         self.profile2_dist_var = tk.StringVar(value="0")
         self.profile2_z_var = tk.StringVar(value="0")
         self.profile2_tilt_var = tk.StringVar(value="0")
+        self.start_x_var = tk.StringVar(value="0")
+        self.start_y_var = tk.StringVar(value="0")
+        self.start_z_var = tk.StringVar(value="0")
+        self.finish_x_var = tk.StringVar(value="0")
+        self.finish_y_var = tk.StringVar(value="0")
+        self.finish_z_var = tk.StringVar(value="0")
         self._build(parent)
 
     def _build(self, parent: ttk.Frame) -> None:
@@ -134,6 +141,19 @@ class BottomRingSection:
         self.profile_canvas = ProfileCanvas(preview_frame)
         self.profile_canvas.pack()
         self.profile_canvas.bind("<Configure>", lambda _e: self._update_profile_preview())
+
+        points_frame = ttk.LabelFrame(frame, text="Старт / финиш (мм)", padding=8)
+        points_frame.pack(fill=tk.X, pady=(0, 8))
+        start_row = ttk.Frame(points_frame)
+        start_row.pack(fill=tk.X, pady=2)
+        self._add_inline_field(start_row, "Старт X:", self.start_x_var, 0, width=8)
+        self._add_inline_field(start_row, "Y:", self.start_y_var, 2, width=8)
+        self._add_inline_field(start_row, "Z:", self.start_z_var, 4, width=8)
+        finish_row = ttk.Frame(points_frame)
+        finish_row.pack(fill=tk.X, pady=2)
+        self._add_inline_field(finish_row, "Финиш X:", self.finish_x_var, 0, width=8)
+        self._add_inline_field(finish_row, "Y:", self.finish_y_var, 2, width=8)
+        self._add_inline_field(finish_row, "Z:", self.finish_z_var, 4, width=8)
 
         buttons = ttk.Frame(frame)
         buttons.pack(fill=tk.X, pady=(0, 4))
@@ -221,6 +241,12 @@ class BottomRingSection:
             self.profile2_dist_var,
             self.profile2_z_var,
             self.profile2_tilt_var,
+            self.start_x_var,
+            self.start_y_var,
+            self.start_z_var,
+            self.finish_x_var,
+            self.finish_y_var,
+            self.finish_z_var,
         ):
             variable.trace_add("write", lambda *_args: callback())
 
@@ -243,6 +269,13 @@ class BottomRingSection:
         else:
             self._apply_recommended_sectors(silent=True)
 
+        self.start_x_var.set(format_number(float(data.get("start_x_mm", self.app.project.start_x_mm))))
+        self.start_y_var.set(format_number(float(data.get("start_y_mm", self.app.project.start_y_mm))))
+        self.start_z_var.set(format_number(float(data.get("start_z_mm", self.app.project.start_z_mm))))
+        self.finish_x_var.set(format_number(float(data.get("finish_x_mm", self.app.project.finish_x_mm))))
+        self.finish_y_var.set(format_number(float(data.get("finish_y_mm", self.app.project.finish_y_mm))))
+        self.finish_z_var.set(format_number(float(data.get("finish_z_mm", self.app.project.finish_z_mm))))
+
         trajectory = self.app.get_trajectory(self.generator_id)
         local = self.app.get_local_trajectory(self.generator_id)
         if trajectory is None:
@@ -260,7 +293,33 @@ class BottomRingSection:
 
     def save_params_to_project(self) -> None:
         params = self._read_params(require_sector_count=True)
-        self.app.project.bottom_ring = params.to_dict()
+        data = params.to_dict()
+        data.update(self._read_trajectory_points_dict())
+        self.app.project.bottom_ring = data
+
+    def _read_trajectory_points(self) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+        start = (
+            parse_float(self.start_x_var.get(), "Старт X"),
+            parse_float(self.start_y_var.get(), "Старт Y"),
+            parse_float(self.start_z_var.get(), "Старт Z"),
+        )
+        finish = (
+            parse_float(self.finish_x_var.get(), "Финиш X"),
+            parse_float(self.finish_y_var.get(), "Финиш Y"),
+            parse_float(self.finish_z_var.get(), "Финиш Z"),
+        )
+        return start, finish
+
+    def _read_trajectory_points_dict(self) -> dict[str, float]:
+        start, finish = self._read_trajectory_points()
+        return {
+            "start_x_mm": start[0],
+            "start_y_mm": start[1],
+            "start_z_mm": start[2],
+            "finish_x_mm": finish[0],
+            "finish_y_mm": finish[1],
+            "finish_z_mm": finish[2],
+        }
 
     def _load_profile_waypoint(self, data: dict, index: int) -> None:
         vars_ = (
@@ -404,7 +463,7 @@ class BottomRingSection:
     def _create_trajectory(self) -> None:
         try:
             params = self._read_params(require_sector_count=True)
-            start_point, finish_point = self.app.form_common.trajectory_points()
+            start_point, finish_point = self._read_trajectory_points()
             trajectory = get_generator(self.generator_id).build(
                 params,
                 start_mm=start_point,

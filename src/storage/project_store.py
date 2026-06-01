@@ -72,6 +72,21 @@ def _migrate_legacy_params(project_root: Path) -> Optional[FormProject]:
     )
 
 
+def _migrate_start_finish_to_bottom_ring(data: dict[str, Any]) -> dict[str, Any]:
+    bottom_ring = dict(data.get("bottom_ring", {}))
+    for key in (
+        "start_x_mm",
+        "start_y_mm",
+        "start_z_mm",
+        "finish_x_mm",
+        "finish_y_mm",
+        "finish_z_mm",
+    ):
+        if key not in bottom_ring and key in data:
+            bottom_ring[key] = data[key]
+    return bottom_ring
+
+
 def load_project(project_root: Optional[Path] = None) -> FormProject:
     root = project_root or Path(__file__).resolve().parents[2]
     path = project_path(root)
@@ -82,6 +97,8 @@ def load_project(project_root: Optional[Path] = None) -> FormProject:
 
     with path.open(encoding="utf-8") as file:
         data = json.load(file)
+
+    bottom_ring = _migrate_start_finish_to_bottom_ring(data)
 
     return FormProject(
         version=str(data.get("version", "1")),
@@ -98,7 +115,7 @@ def load_project(project_root: Optional[Path] = None) -> FormProject:
         fixture_rx_deg=float(data.get("fixture_rx_deg", DEFAULT_POINT_MM)),
         fixture_ry_deg=float(data.get("fixture_ry_deg", DEFAULT_POINT_MM)),
         fixture_rz_deg=float(data.get("fixture_rz_deg", DEFAULT_POINT_MM)),
-        bottom_ring=dict(data.get("bottom_ring", {})),
+        bottom_ring=bottom_ring,
         top_ring=dict(data.get("top_ring", {})),
         cylinder_wall=dict(data.get("cylinder_wall", {})),
         trajectories=dict(

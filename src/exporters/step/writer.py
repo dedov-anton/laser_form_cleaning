@@ -59,6 +59,7 @@ class _LineSpec:
 class _CircleSpec:
     radius: float
     color: RgbColor
+    z_mm: float = 0.0
 
 
 class StepWriter:
@@ -83,12 +84,20 @@ class StepWriter:
             )
         )
 
-    def add_circle(self, radius: float, color: RgbColor, group: str = "") -> None:
+    def add_circle(
+        self, radius: float, color: RgbColor, group: str = "", *, z_mm: float = 0.0
+    ) -> None:
         del group
         scaled_radius = radius * self._length_scale
         if scaled_radius <= 0:
             return
-        self._circles.append(_CircleSpec(radius=scaled_radius, color=color))
+        self._circles.append(
+            _CircleSpec(
+                radius=scaled_radius,
+                color=color,
+                z_mm=z_mm * self._length_scale,
+            )
+        )
 
     def add_point_marker(
         self,
@@ -210,7 +219,7 @@ class StepWriter:
 
         for circle_spec in self._circles:
             curve_set_id = _add_circle_entity(
-                add, point, direction, circle_spec.radius
+                add, point, direction, circle_spec.radius, circle_spec.z_mm
             )
             curve_set_ids.append(curve_set_id)
             styled_items.append((curve_set_id, curve_style(circle_spec.color)))
@@ -280,16 +289,17 @@ def _add_circle_entity(
     point: PointFn,
     direction: DirectionFn,
     radius: float,
+    z_mm: float = 0.0,
 ) -> int:
-    origin_id = point(0.0, 0.0, 0.0)
+    origin_id = point(0.0, 0.0, z_mm)
     z_dir_id = direction(0.0, 0.0, 1.0)
     x_dir_id = direction(1.0, 0.0, 0.0)
     axis_id = add(
         f"AXIS2_PLACEMENT_3D('',#{origin_id},#{z_dir_id},#{x_dir_id})"
     )
     circle_id = add(f"CIRCLE('',#{axis_id},{_fmt(radius)})")
-    start_id = point(radius, 0.0, 0.0)
-    end_id = point(radius, 0.0, 0.0)
+    start_id = point(radius, 0.0, z_mm)
+    end_id = point(radius, 0.0, z_mm)
     two_pi = 2.0 * math.pi
     trimmed_id = add(
         "TRIMMED_CURVE('',"

@@ -5,7 +5,6 @@ from tkinter import ttk
 from typing import TYPE_CHECKING, Callable
 
 from src.common.frame_pose import FramePose6D
-from src.common.geometry import Point3
 from src.gui.parsing import format_number, parse_float
 
 if TYPE_CHECKING:
@@ -22,12 +21,6 @@ class FormCommonSection:
         self.fixture_rx_var = tk.StringVar(value="0")
         self.fixture_ry_var = tk.StringVar(value="0")
         self.fixture_rz_var = tk.StringVar(value="0")
-        self.start_x_var = tk.StringVar(value="0")
-        self.start_y_var = tk.StringVar(value="0")
-        self.start_z_var = tk.StringVar(value="0")
-        self.finish_x_var = tk.StringVar(value="0")
-        self.finish_y_var = tk.StringVar(value="0")
-        self.finish_z_var = tk.StringVar(value="0")
         self._build(parent)
 
     def _build(self, parent: ttk.Frame) -> None:
@@ -56,21 +49,6 @@ class FormCommonSection:
             wraplength=760,
         ).pack(anchor=tk.W, pady=(4, 0))
 
-        points = ttk.LabelFrame(frame, text="Старт / финиш (мм)", padding=6)
-        points.pack(fill=tk.X, pady=(8, 0))
-
-        start_row = ttk.Frame(points)
-        start_row.pack(fill=tk.X, pady=2)
-        self._inline(start_row, "Старт X:", self.start_x_var, 0)
-        self._inline(start_row, "Y:", self.start_y_var, 2)
-        self._inline(start_row, "Z:", self.start_z_var, 4)
-
-        finish_row = ttk.Frame(points)
-        finish_row.pack(fill=tk.X, pady=2)
-        self._inline(finish_row, "Финиш X:", self.finish_x_var, 0)
-        self._inline(finish_row, "Y:", self.finish_y_var, 2)
-        self._inline(finish_row, "Z:", self.finish_z_var, 4)
-
     def _inline(
         self,
         parent: ttk.Frame,
@@ -95,12 +73,6 @@ class FormCommonSection:
             self.fixture_rx_var,
             self.fixture_ry_var,
             self.fixture_rz_var,
-            self.start_x_var,
-            self.start_y_var,
-            self.start_z_var,
-            self.finish_x_var,
-            self.finish_y_var,
-            self.finish_z_var,
         ):
             variable.trace_add("write", lambda *_args: callback())
 
@@ -117,19 +89,6 @@ class FormCommonSection:
             rz_deg=parse_float(self.fixture_rz_var.get(), "Поза Rz"),
         )
 
-    def trajectory_points(self) -> tuple[Point3, Point3]:
-        start = (
-            parse_float(self.start_x_var.get(), "Старт X"),
-            parse_float(self.start_y_var.get(), "Старт Y"),
-            parse_float(self.start_z_var.get(), "Старт Z"),
-        )
-        finish = (
-            parse_float(self.finish_x_var.get(), "Финиш X"),
-            parse_float(self.finish_y_var.get(), "Финиш Y"),
-            parse_float(self.finish_z_var.get(), "Финиш Z"),
-        )
-        return start, finish
-
     def load_from_project(self) -> None:
         project = self.app.project
         self.beam_width_var.set(format_number(project.beam_width_mm))
@@ -139,12 +98,6 @@ class FormCommonSection:
         self.fixture_rx_var.set(format_number(project.fixture_rx_deg))
         self.fixture_ry_var.set(format_number(project.fixture_ry_deg))
         self.fixture_rz_var.set(format_number(project.fixture_rz_deg))
-        self.start_x_var.set(format_number(project.start_x_mm))
-        self.start_y_var.set(format_number(project.start_y_mm))
-        self.start_z_var.set(format_number(project.start_z_mm))
-        self.finish_x_var.set(format_number(project.finish_x_mm))
-        self.finish_y_var.set(format_number(project.finish_y_mm))
-        self.finish_z_var.set(format_number(project.finish_z_mm))
 
     def save_to_project(self) -> None:
         project = self.app.project
@@ -156,9 +109,6 @@ class FormCommonSection:
         project.fixture_rx_deg = pose.rx_deg
         project.fixture_ry_deg = pose.ry_deg
         project.fixture_rz_deg = pose.rz_deg
-        start, finish = self.trajectory_points()
-        project.start_x_mm, project.start_y_mm, project.start_z_mm = start
-        project.finish_x_mm, project.finish_y_mm, project.finish_z_mm = finish
 
     def save_fixture_pose_to_project(self) -> None:
         pose = self.fixture_pose()

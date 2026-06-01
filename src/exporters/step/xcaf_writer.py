@@ -51,12 +51,14 @@ class XcafStepWriter:
         edge = BRepBuilderAPI_MakeEdge(_gp_pnt(start), _gp_pnt(finish)).Edge()
         self._items.append(_ColoredEdge(edge=edge, color=color))
 
-    def add_circle(self, radius: float, color: RgbColor, group: str) -> None:
+    def add_circle(
+        self, radius: float, color: RgbColor, group: str, *, z_mm: float = 0.0
+    ) -> None:
         del group
         if radius <= 0:
             return
         circle = gp_Circ(
-            gp_Ax2(gp_Pnt(0.0, 0.0, 0.0), gp_Dir(0.0, 0.0, 1.0)),
+            gp_Ax2(gp_Pnt(0.0, 0.0, z_mm), gp_Dir(0.0, 0.0, 1.0)),
             radius,
         )
         edge = BRepBuilderAPI_MakeEdge(circle).Edge()

@@ -56,6 +56,7 @@ def _fill_writer(writer, trajectory: WorkTrajectory) -> None:
             float(circle["radius_mm"]),
             REFERENCE_COLOR,
             str(circle.get("label", "reference")),
+            z_mm=float(circle.get("z_mm", 0.0)),
         )
 
     for polyline in trajectory.reference_geometry.get("polylines", []):

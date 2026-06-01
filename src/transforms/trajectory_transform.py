@@ -11,11 +11,11 @@ from src.common.trajectory import WorkSegment, WorkTrajectory
 _CIRCLE_SAMPLES = 72
 
 
-def _sample_circle_polyline(radius_mm: float) -> List[Point3]:
+def _sample_circle_polyline(radius_mm: float, z_mm: float = 0.0) -> List[Point3]:
     points: List[Point3] = []
     for index in range(_CIRCLE_SAMPLES + 1):
         angle = 2.0 * math.pi * index / _CIRCLE_SAMPLES
-        points.append((radius_mm * math.cos(angle), radius_mm * math.sin(angle), 0.0))
+        points.append((radius_mm * math.cos(angle), radius_mm * math.sin(angle), z_mm))
     return points
 
 
@@ -34,7 +34,10 @@ def _transform_reference_geometry(
 
     for circle in result.get("circles", []):
         radius_mm = float(circle["radius_mm"])
-        polyline_points = _transform_polyline(_sample_circle_polyline(radius_mm), rotation, translation)
+        z_mm = float(circle.get("z_mm", 0.0))
+        polyline_points = _transform_polyline(
+            _sample_circle_polyline(radius_mm, z_mm), rotation, translation
+        )
         for index in range(len(polyline_points) - 1):
             polylines.append(
                 {

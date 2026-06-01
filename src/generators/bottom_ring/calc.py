@@ -5,6 +5,12 @@ import math
 from typing import List, Optional, Tuple
 
 from src.common.geometry import DEFAULT_TOOL_AXIS_Z, Point3, Pose6D, TravelSegment
+from src.common.tool_orientation import (
+    normalize_vector,
+    orthogonal_tool_axis_x,
+    radial_direction_xy,
+    rotate_vector,
+)
 from src.generators.bottom_ring.models import PassStop, RadialPass, RingTrajectory
 from src.generators.bottom_ring.params import BottomRingParams, ProfileWaypoint
 
@@ -350,18 +356,6 @@ def build_travel_segments(
 
     return segments
 
-def radial_direction_xy(position: Point3) -> Point3:
-
-    x, y, _ = position
-
-    length = math.hypot(x, y)
-
-    if length < 1e-9:
-
-        return (1.0, 0.0, 0.0)
-
-    return (x / length, y / length, 0.0)
-
 def pass_direction_xy(start: Point3, finish: Point3) -> Point3:
 
     dx = finish[0] - start[0]
@@ -375,60 +369,6 @@ def pass_direction_xy(start: Point3, finish: Point3) -> Point3:
         return radial_direction_xy(start)
 
     return (dx / length, dy / length, 0.0)
-
-def _normalize_vector(vector: Point3) -> Point3:
-
-    length = math.hypot(vector[0], vector[1], vector[2])
-
-    if length < 1e-9:
-
-        return vector
-
-    return (vector[0] / length, vector[1] / length, vector[2] / length)
-
-def _cross(a: Point3, b: Point3) -> Point3:
-
-    return (
-
-        a[1] * b[2] - a[2] * b[1],
-
-        a[2] * b[0] - a[0] * b[2],
-
-        a[0] * b[1] - a[1] * b[0],
-
-    )
-
-def _dot(a: Point3, b: Point3) -> float:
-
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-
-def _rotate_vector(vector: Point3, axis: Point3, angle_deg: float) -> Point3:
-
-    if abs(angle_deg) < 1e-9:
-
-        return vector
-
-    unit_axis = _normalize_vector(axis)
-
-    angle_rad = math.radians(angle_deg)
-
-    cos_a = math.cos(angle_rad)
-
-    sin_a = math.sin(angle_rad)
-
-    cross = _cross(unit_axis, vector)
-
-    dot = _dot(unit_axis, vector)
-
-    return (
-
-        vector[0] * cos_a + cross[0] * sin_a + unit_axis[0] * dot * (1.0 - cos_a),
-
-        vector[1] * cos_a + cross[1] * sin_a + unit_axis[1] * dot * (1.0 - cos_a),
-
-        vector[2] * cos_a + cross[2] * sin_a + unit_axis[2] * dot * (1.0 - cos_a),
-
-    )
 
 def tilt_tool_axis_z(pass_dir_xy: Point3, tilt_deg: float) -> Point3:
 
@@ -446,31 +386,7 @@ def tilt_tool_axis_z(pass_dir_xy: Point3, tilt_deg: float) -> Point3:
 
     rot_axis = (-dy / axis_len, dx / axis_len, 0.0)
 
-    return _normalize_vector(_rotate_vector(DEFAULT_TOOL_AXIS_Z, rot_axis, -tilt_deg))
-
-def orthogonal_tool_axis_x(preferred_xy: Point3, tool_axis_z: Point3) -> Point3:
-
-    preferred = (preferred_xy[0], preferred_xy[1], 0.0)
-
-    projection = _dot(preferred, tool_axis_z)
-
-    projected = (
-
-        preferred[0] - projection * tool_axis_z[0],
-
-        preferred[1] - projection * tool_axis_z[1],
-
-        preferred[2] - projection * tool_axis_z[2],
-
-    )
-
-    length = math.hypot(projected[0], projected[1], projected[2])
-
-    if length < 1e-9:
-
-        return radial_direction_xy(preferred)
-
-    return (projected[0] / length, projected[1] / length, projected[2] / length)
+    return normalize_vector(rotate_vector(DEFAULT_TOOL_AXIS_Z, rot_axis, -tilt_deg))
 
 def build_work_pose(
 
