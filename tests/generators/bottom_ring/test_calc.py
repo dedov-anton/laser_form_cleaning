@@ -3,8 +3,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.core.models import ProfileWaypoint, RingParams
-from src.core.ring_calc import (
+from src.common.trajectory import WorkTrajectory
+from src.exporters.step.export import export_trajectory
+from src.generators.bottom_ring.calc import (
     angle_in_sector,
     angle_distance_to_positive_x,
     build_radial_pass,
@@ -15,7 +16,8 @@ from src.core.ring_calc import (
     pass_direction_xy,
     recommended_sector_count,
 )
-from src.export.step_export import export_ring_trajectory
+from src.generators.bottom_ring.adapter import to_work_trajectory
+from src.generators.bottom_ring.params import BottomRingParams, ProfileWaypoint, RingParams
 
 
 class RingCalcTests(unittest.TestCase):
@@ -305,6 +307,25 @@ class RingCalcTests(unittest.TestCase):
         self.assertEqual(io_radii, list(reversed(oi_radii)))
 
 
+class WorkTrajectoryTests(unittest.TestCase):
+    def test_adapter_produces_work_trajectory(self) -> None:
+        params = BottomRingParams(
+            inner_radius_mm=500.0,
+            ring_width_mm=200.0,
+            beam_width_mm=100.0,
+            sector_count=4,
+        )
+        ring = build_trajectory(params)
+        work = to_work_trajectory(ring, params)
+
+        self.assertIsInstance(work, WorkTrajectory)
+        self.assertEqual(work.generator_id, "bottom_ring")
+        self.assertEqual(len(work.poses), len(ring.poses))
+        self.assertEqual(len(work.travel_segments), len(ring.travel_segments))
+        self.assertGreater(len(work.work_segments), 0)
+        self.assertEqual(len(work.circle_radii_mm()), 2)
+
+
 class StepExportTests(unittest.TestCase):
     def test_export_contains_trajectory_colors(self) -> None:
         params = RingParams(
@@ -313,11 +334,11 @@ class StepExportTests(unittest.TestCase):
             beam_width_mm=100.0,
             sector_count=4,
         )
-        trajectory = build_trajectory(params)
+        work = to_work_trajectory(build_trajectory(params), params)
 
         with tempfile.TemporaryDirectory() as temp_dir:
             filepath = Path(temp_dir) / "ring.step"
-            export_ring_trajectory(trajectory, filepath)
+            export_trajectory(work, filepath)
             content = filepath.read_text(encoding="utf-8")
 
             self.assertTrue(filepath.exists())

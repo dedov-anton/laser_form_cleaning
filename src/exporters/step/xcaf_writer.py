@@ -21,7 +21,7 @@ from OCP.XCAFApp import XCAFApp_Application
 from OCP.XCAFDoc import XCAFDoc_ColorType, XCAFDoc_DocumentTool
 from OCP.XSControl import XSControl_WorkSession
 
-from src.export.step_writer import POINT_MARKER_SIZE_MM, RgbColor, step_export_rgb
+from src.exporters.step.writer import POINT_MARKER_SIZE_MM, RgbColor, step_export_rgb
 
 Point3 = Tuple[float, float, float]
 

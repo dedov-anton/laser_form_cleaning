@@ -1,38 +1,12 @@
 from __future__ import annotations
 
-
-
 import math
 
 from typing import List, Optional, Tuple
 
-
-
-from src.core.models import (
-
-    DEFAULT_TOOL_AXIS_Z,
-
-    PassStop,
-
-    Point3,
-
-    Pose6D,
-
-    ProfileWaypoint,
-
-    RadialPass,
-
-    RingParams,
-
-    RingTrajectory,
-
-    TravelSegment,
-
-)
-
-
-
-
+from src.common.geometry import DEFAULT_TOOL_AXIS_Z, Point3, Pose6D, TravelSegment
+from src.generators.bottom_ring.models import PassStop, RadialPass, RingTrajectory
+from src.generators.bottom_ring.params import BottomRingParams, ProfileWaypoint
 
 def recommended_sector_count(outer_radius_mm: float, beam_width_mm: float) -> int:
 
@@ -41,10 +15,6 @@ def recommended_sector_count(outer_radius_mm: float, beam_width_mm: float) -> in
         raise ValueError("outer_radius_mm and beam_width_mm must be positive")
 
     return max(1, math.floor(2 * math.pi * outer_radius_mm / beam_width_mm) + 1)
-
-
-
-
 
 def overlap_mm(radius_mm: float, beam_width_mm: float, sector_count: int) -> float:
 
@@ -56,10 +26,6 @@ def overlap_mm(radius_mm: float, beam_width_mm: float, sector_count: int) -> flo
 
     return beam_width_mm - pitch
 
-
-
-
-
 def overlap_percent(overlap_mm_value: float, beam_width_mm: float) -> float:
 
     if beam_width_mm <= 0:
@@ -67,10 +33,6 @@ def overlap_percent(overlap_mm_value: float, beam_width_mm: float) -> float:
         return 0.0
 
     return 100.0 * overlap_mm_value / beam_width_mm
-
-
-
-
 
 def polar_to_xyz(radius_mm: float, angle_deg: float, z_mm: float = 0.0) -> Point3:
 
@@ -86,17 +48,9 @@ def polar_to_xyz(radius_mm: float, angle_deg: float, z_mm: float = 0.0) -> Point
 
     )
 
-
-
-
-
 def normalize_angle_deg(angle_deg: float) -> float:
 
     return angle_deg % 360.0
-
-
-
-
 
 def angle_in_sector(angle_deg: float, start_deg: float, end_deg: float) -> bool:
 
@@ -116,17 +70,9 @@ def angle_in_sector(angle_deg: float, start_deg: float, end_deg: float) -> bool:
 
     return angle >= start or angle <= end
 
-
-
-
-
 def ccw_distance(from_deg: float, to_deg: float) -> float:
 
     return (normalize_angle_deg(to_deg) - normalize_angle_deg(from_deg)) % 360.0
-
-
-
-
 
 def angle_distance_to_positive_x(angle_deg: float) -> float:
 
@@ -134,11 +80,7 @@ def angle_distance_to_positive_x(angle_deg: float) -> float:
 
     return min(normalized, 360.0 - normalized)
 
-
-
-
-
-def active_profile_waypoints(params: RingParams) -> List[ProfileWaypoint]:
+def active_profile_waypoints(params: BottomRingParams) -> List[ProfileWaypoint]:
 
     waypoints = [
 
@@ -150,15 +92,11 @@ def active_profile_waypoints(params: RingParams) -> List[ProfileWaypoint]:
 
     return [waypoint for waypoint in waypoints if waypoint.distance_from_outer_mm > 0.0]
 
-
-
-
-
 def build_pass_stops(
 
     angle_deg: float,
 
-    params: RingParams,
+    params: BottomRingParams,
 
     outer_to_inner: bool,
 
@@ -182,8 +120,6 @@ def build_pass_stops(
 
     )
 
-
-
     stops: List[PassStop] = [
 
         PassStop(
@@ -197,8 +133,6 @@ def build_pass_stops(
         )
 
     ]
-
-
 
     for index, waypoint in enumerate(profile_waypoints, start=1):
 
@@ -228,8 +162,6 @@ def build_pass_stops(
 
         )
 
-
-
     stops.append(
 
         PassStop(
@@ -244,17 +176,11 @@ def build_pass_stops(
 
     )
 
-
-
     if outer_to_inner:
 
         return list(reversed(stops))
 
     return stops
-
-
-
-
 
 def build_radial_pass(
 
@@ -262,7 +188,7 @@ def build_radial_pass(
 
     angle_deg: float,
 
-    params: RingParams,
+    params: BottomRingParams,
 
     outer_to_inner: bool,
 
@@ -282,15 +208,11 @@ def build_radial_pass(
 
     )
 
-
-
-
-
 def order_processing_passes(
 
     angles_deg: List[float],
 
-    params: RingParams,
+    params: BottomRingParams,
 
     entry_start_deg: Optional[float],
 
@@ -334,8 +256,6 @@ def order_processing_passes(
 
         )
 
-
-
     rotated = angles_deg[start_index:] + angles_deg[:start_index]
 
     has_entry = entry_start_deg is not None and entry_end_deg is not None
@@ -364,10 +284,6 @@ def order_processing_passes(
 
     ]
 
-
-
-
-
 def build_travel_segments(
 
     ordered_passes: List[RadialPass],
@@ -381,8 +297,6 @@ def build_travel_segments(
     if not ordered_passes:
 
         return []
-
-
 
     segments: List[TravelSegment] = [
 
@@ -399,8 +313,6 @@ def build_travel_segments(
         )
 
     ]
-
-
 
     for pass_index in range(len(ordered_passes) - 1):
 
@@ -420,8 +332,6 @@ def build_travel_segments(
 
         )
 
-
-
     segments.append(
 
         TravelSegment(
@@ -440,10 +350,6 @@ def build_travel_segments(
 
     return segments
 
-
-
-
-
 def radial_direction_xy(position: Point3) -> Point3:
 
     x, y, _ = position
@@ -455,10 +361,6 @@ def radial_direction_xy(position: Point3) -> Point3:
         return (1.0, 0.0, 0.0)
 
     return (x / length, y / length, 0.0)
-
-
-
-
 
 def pass_direction_xy(start: Point3, finish: Point3) -> Point3:
 
@@ -474,10 +376,6 @@ def pass_direction_xy(start: Point3, finish: Point3) -> Point3:
 
     return (dx / length, dy / length, 0.0)
 
-
-
-
-
 def _normalize_vector(vector: Point3) -> Point3:
 
     length = math.hypot(vector[0], vector[1], vector[2])
@@ -487,10 +385,6 @@ def _normalize_vector(vector: Point3) -> Point3:
         return vector
 
     return (vector[0] / length, vector[1] / length, vector[2] / length)
-
-
-
-
 
 def _cross(a: Point3, b: Point3) -> Point3:
 
@@ -504,17 +398,9 @@ def _cross(a: Point3, b: Point3) -> Point3:
 
     )
 
-
-
-
-
 def _dot(a: Point3, b: Point3) -> float:
 
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-
-
-
-
 
 def _rotate_vector(vector: Point3, axis: Point3, angle_deg: float) -> Point3:
 
@@ -544,10 +430,6 @@ def _rotate_vector(vector: Point3, axis: Point3, angle_deg: float) -> Point3:
 
     )
 
-
-
-
-
 def tilt_tool_axis_z(pass_dir_xy: Point3, tilt_deg: float) -> Point3:
 
     if abs(tilt_deg) < 1e-9:
@@ -565,10 +447,6 @@ def tilt_tool_axis_z(pass_dir_xy: Point3, tilt_deg: float) -> Point3:
     rot_axis = (-dy / axis_len, dx / axis_len, 0.0)
 
     return _normalize_vector(_rotate_vector(DEFAULT_TOOL_AXIS_Z, rot_axis, -tilt_deg))
-
-
-
-
 
 def orthogonal_tool_axis_x(preferred_xy: Point3, tool_axis_z: Point3) -> Point3:
 
@@ -593,10 +471,6 @@ def orthogonal_tool_axis_x(preferred_xy: Point3, tool_axis_z: Point3) -> Point3:
         return radial_direction_xy(preferred)
 
     return (projected[0] / length, projected[1] / length, projected[2] / length)
-
-
-
-
 
 def build_work_pose(
 
@@ -630,10 +504,6 @@ def build_work_pose(
 
     )
 
-
-
-
-
 def build_pose(
 
     index: int,
@@ -662,10 +532,6 @@ def build_pose(
 
     )
 
-
-
-
-
 def build_poses(
 
     start_point_mm: Point3,
@@ -681,8 +547,6 @@ def build_poses(
         build_pose(0, "start", start_point_mm, DEFAULT_TOOL_AXIS_Z)
 
     ]
-
-
 
     for radial_pass in ordered_passes:
 
@@ -710,15 +574,9 @@ def build_poses(
 
             )
 
-
-
     poses.append(build_pose(len(poses), "finish", finish_point_mm, DEFAULT_TOOL_AXIS_Z))
 
     return poses
-
-
-
-
 
 def _validate_tilt(label: str, value: float) -> None:
 
@@ -730,13 +588,9 @@ def _validate_tilt(label: str, value: float) -> None:
 
         raise ValueError(f"{label}: угол должен быть в диапазоне -89…89")
 
-
-
-
-
 def build_trajectory(
 
-    params: RingParams,
+    params: BottomRingParams,
 
     start_point_mm: Point3 = (0.0, 0.0, 0.0),
 
@@ -784,8 +638,6 @@ def build_trajectory(
 
                 raise ValueError(f"{label}: угол должен быть в диапазоне 0–360")
 
-
-
     _validate_tilt("Наклон Z на внутр. радиусе", params.inner_tilt_deg)
 
     _validate_tilt("Наклон Z на внеш. радиусе", params.outer_tilt_deg)
@@ -814,15 +666,11 @@ def build_trajectory(
 
                 raise ValueError(f"Промеж. точка {index}: некорректное значение Z")
 
-
-
     outer_radius = params.outer_radius_mm
 
     angle_step = 360.0 / params.sector_count
 
     angles_deg = [start_angle_deg + index * angle_step for index in range(params.sector_count)]
-
-
 
     ordered_passes = order_processing_passes(
 
@@ -840,13 +688,9 @@ def build_trajectory(
 
     poses = build_poses(start_point_mm, finish_point_mm, ordered_passes)
 
-
-
     overlap_outer = overlap_mm(outer_radius, params.beam_width_mm, params.sector_count)
 
     overlap_inner = overlap_mm(params.inner_radius_mm, params.beam_width_mm, params.sector_count)
-
-
 
     return RingTrajectory(
 
@@ -877,5 +721,4 @@ def build_trajectory(
         poses=poses,
 
     )
-
 

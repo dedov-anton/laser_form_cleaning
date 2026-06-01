@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import math
 import tkinter as tk
 from dataclasses import dataclass
 from typing import List, Tuple
 
-from src.core.models import ProfileWaypoint
-from src.core.ring_calc import tilt_tool_axis_z
+from src.generators.bottom_ring.params import ProfileWaypoint
+from src.generators.bottom_ring.calc import tilt_tool_axis_z
 
 Point2 = Tuple[float, float]
 
@@ -115,12 +116,10 @@ class ProfileCanvas(tk.Canvas):
         ring_width_mm: float,
         px_per_mm: float,
     ) -> None:
-        # Ось Z инструмента в плоскости R–Z (луч наружу = +R), как в ring_calc / STEP.
         axis_dr, _, axis_dz = tilt_tool_axis_z((1.0, 0.0, 0.0), tilt_deg)
         arrow_len_mm = min(ring_width_mm * 0.15, 28.0)
 
         tip_x, tip_y = to_canvas(radial_mm, z_mm)
-        # Один масштаб для обеих осей — иначе наклон на экране «сплющивается» в вертикаль.
         vec_scale = px_per_mm
         tail_x = tip_x - axis_dr * arrow_len_mm * vec_scale
         tail_y = tip_y + axis_dz * arrow_len_mm * vec_scale
