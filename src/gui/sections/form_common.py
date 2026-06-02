@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import filedialog, messagebox, ttk
 from typing import TYPE_CHECKING, Callable
 
 from src.common.frame_pose import FramePose6D
+from src.common.project import DEFAULT_ROBOT_IP, DEFAULT_TOOL_MOUNT_ROTATION_DEG
 from src.exporters.robot.settings import RobotExportSettings
+from src.exporters.robot.upload import send_program_file_to_robot
 from src.gui.parsing import format_number, parse_float
 
 if TYPE_CHECKING:
@@ -25,6 +27,8 @@ class FormCommonSection:
         self.robot_blend_var = tk.StringVar(value="0.001")
         self.robot_velocity_var = tk.StringVar(value="0.03")
         self.robot_acceleration_var = tk.StringVar(value="0.05")
+        self.robot_ip_var = tk.StringVar(value=DEFAULT_ROBOT_IP)
+        self.tool_mount_rotation_var = tk.StringVar(value=str(DEFAULT_TOOL_MOUNT_ROTATION_DEG))
         self._build(parent)
 
     def _build(self, parent: ttk.Frame) -> None:
@@ -44,6 +48,16 @@ class FormCommonSection:
         self._inline(robot_row, "Blend (м):", self.robot_blend_var, 0, width=8)
         self._inline(robot_row, "v (м/с):", self.robot_velocity_var, 2, width=8)
         self._inline(robot_row, "a (м/с²):", self.robot_acceleration_var, 4, width=8)
+        self._inline(robot_row, "Крепление (°):", self.tool_mount_rotation_var, 6, width=8)
+
+        robot_send_row = ttk.Frame(robot)
+        robot_send_row.pack(fill=tk.X, pady=(6, 2))
+        self._inline(robot_send_row, "IP робота:", self.robot_ip_var, 0, width=14)
+        ttk.Button(
+            robot_send_row,
+            text="Отправить в робот УП",
+            command=self._send_program_to_robot,
+        ).grid(row=0, column=2, sticky=tk.W, padx=(16, 0))
 
         fixture = ttk.LabelFrame(frame, text="Поза матрицы / базы (мм, °)", padding=6)
         fixture.pack(fill=tk.X, pady=(8, 0))
@@ -88,6 +102,8 @@ class FormCommonSection:
             self.robot_blend_var,
             self.robot_velocity_var,
             self.robot_acceleration_var,
+            self.robot_ip_var,
+            self.tool_mount_rotation_var,
         ):
             variable.trace_add("write", lambda *_args: callback())
 
@@ -109,7 +125,32 @@ class FormCommonSection:
             blend_radius_mm=parse_float(self.robot_blend_var.get(), "Радиус скругления"),
             velocity=parse_float(self.robot_velocity_var.get(), "Скорость v"),
             acceleration=parse_float(self.robot_acceleration_var.get(), "Ускорение a"),
+            tool_mount_rotation_deg=parse_float(
+                self.tool_mount_rotation_var.get(), "Поворот крепления"
+            ),
         )
+
+    def robot_ip(self) -> str:
+        return self.robot_ip_var.get().strip()
+
+    def _send_program_to_robot(self) -> None:
+        filepath = filedialog.askopenfilename(
+            title="Отправить УП на робота",
+            filetypes=[("УП Elite", "*.txt"), ("All files", "*.*")],
+        )
+        if not filepath:
+            return
+
+        ip = self.robot_ip()
+        try:
+            self.save_to_project()
+            self.app.save_project()
+            send_program_file_to_robot(filepath, ip)
+        except Exception as error:
+            messagebox.showerror("Отправка УП", str(error))
+            return
+
+        messagebox.showinfo("Отправка УП", f"УП отправлена на робота {ip}:\n{filepath}")
 
     def load_from_project(self) -> None:
         project = self.app.project
@@ -123,6 +164,8 @@ class FormCommonSection:
         self.robot_blend_var.set(format_number(project.robot_blend_radius_mm))
         self.robot_velocity_var.set(format_number(project.robot_velocity))
         self.robot_acceleration_var.set(format_number(project.robot_acceleration))
+        self.robot_ip_var.set(project.robot_ip)
+        self.tool_mount_rotation_var.set(format_number(project.tool_mount_rotation_deg))
 
     def save_to_project(self) -> None:
         project = self.app.project
@@ -138,6 +181,8 @@ class FormCommonSection:
         project.robot_blend_radius_mm = robot.blend_radius_mm
         project.robot_velocity = robot.velocity
         project.robot_acceleration = robot.acceleration
+        project.robot_ip = self.robot_ip()
+        project.tool_mount_rotation_deg = robot.tool_mount_rotation_deg
 
     def save_fixture_pose_to_project(self) -> None:
         pose = self.fixture_pose()

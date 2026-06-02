@@ -1,7 +1,7 @@
 import math
 import unittest
 
-from src.common.tool_orientation import dot, radial_direction_xy
+from src.common.tool_orientation import dot, orthogonal_tool_axis_x, radial_direction_xy
 from src.generators.cylinder_wall.adapter import to_work_trajectory
 from src.generators.cylinder_wall.calc import (
     build_trajectory,
@@ -9,6 +9,7 @@ from src.generators.cylinder_wall.calc import (
     overlap_per_sector,
     recommended_passes_per_sector,
     sector_pass_angles,
+    stop_path_tangent,
 )
 from src.generators.cylinder_wall.params import SECTOR_COUNT, CylinderWallParams, WallProfileWaypoint
 
@@ -156,3 +157,24 @@ class CylinderWallCalcTests(unittest.TestCase):
             build_trajectory(
                 self._params(profile_point_1=WallProfileWaypoint(200.0, 0.0, 0.0))
             )
+
+    def test_tool_axis_x_from_path_tangent(self) -> None:
+        params = self._params(
+            top_tilt_deg=0.0,
+            bottom_tilt_deg=0.0,
+            profile_point_1=WallProfileWaypoint(80.0, 25.0, 0.0),
+        )
+        trajectory = build_trajectory(params)
+        stops = trajectory.passes[0].stops
+        profile_pose = next(
+            pose for pose in trajectory.poses if pose.pose_type == "work_profile_1"
+        )
+        stop_index = next(
+            index for index, stop in enumerate(stops) if stop.pose_type == "work_profile_1"
+        )
+        path_tangent = stop_path_tangent(stops, stop_index)
+        expected_x = orthogonal_tool_axis_x(path_tangent, profile_pose.tool_axis_z)
+        for index in range(3):
+            self.assertAlmostEqual(profile_pose.tool_axis_x[index], expected_x[index], places=6)
+        self.assertNotAlmostEqual(path_tangent[0], 0.0, places=3)
+        self.assertNotAlmostEqual(path_tangent[1], 0.0, places=3)

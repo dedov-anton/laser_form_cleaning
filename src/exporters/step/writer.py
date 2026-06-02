@@ -112,7 +112,8 @@ class StepWriter:
         self.add_line((x - half, y, z), (x + half, y, z), color)
         self.add_line((x, y - half, z), (x, y + half, z), color)
 
-    def write(self, filepath: Path) -> None:
+    def write(self, filepath: Path | str) -> None:
+        path = Path(filepath)
         entities: List[str] = []
         next_id = 0
 
@@ -249,7 +250,7 @@ class StepWriter:
             add(f"STYLED_ITEM('color',(#{style_id}),#{curve_set_id})")
 
         footer = ["ENDSEC;", "END-ISO-10303-21;"]
-        filepath.write_text(
+        path.write_text(
             "\n".join(header + entities + footer) + "\n",
             encoding="utf-8",
         )

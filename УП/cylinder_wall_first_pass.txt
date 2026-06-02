@@ -1,0 +1,9 @@
+# TRAJECTORY_LAYER: cylinder_wall
+# TEST: first vertical pass only (pass_index=0), no start/finish
+# From config/project.json cache
+def welding_program():
+ pose_work_0 = [0.2974, 0.0392, 0.3000, -1.5708, 0.0000, 1.7018]
+ movel(pose_work_0, a=0.05, v=0.03, t=0, r=0.0000)
+ pose_work_1 = [0.2974, 0.0392, 0.1000, -1.5708, 0.0000, 1.7018]
+ movel(pose_work_1, a=0.05, v=0.03, t=0, r=0.0000)
+end

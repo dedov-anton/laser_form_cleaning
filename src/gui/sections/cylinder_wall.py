@@ -30,6 +30,10 @@ from src.gui.parsing import (
 from src.gui.widgets.wall_profile_canvas import WallProfileCanvas
 from src.storage.project_store import store_local_trajectory, store_trajectory
 from src.transforms.trajectory_transform import transform_work_trajectory
+from src.transforms.wrist_correction_export import (
+    format_wrist_correction_summary,
+    run_cylinder_wrist_correction,
+)
 
 if TYPE_CHECKING:
     from src.gui.app import TrajectoryApp
@@ -72,6 +76,7 @@ class CylinderWallSection:
         self.finish_x_var = tk.StringVar(value="0")
         self.finish_y_var = tk.StringVar(value="0")
         self.finish_z_var = tk.StringVar(value="0")
+        self.lcorr_var = tk.StringVar(value="0")
         self.status_var = tk.StringVar(value="Траектория: не создана")
         self._build(parent)
 
@@ -203,7 +208,16 @@ class CylinderWallSection:
         self.export_robot_button = ttk.Button(
             buttons, text="Создать УП", command=self._export_robot, state=tk.DISABLED
         )
-        self.export_robot_button.pack(side=tk.LEFT)
+        self.export_robot_button.pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Label(buttons, text="Lcorr (мм):").pack(side=tk.LEFT, padx=(0, 4))
+        ttk.Entry(buttons, textvariable=self.lcorr_var, width=6).pack(side=tk.LEFT, padx=(0, 8))
+        self.wrist_correction_button = ttk.Button(
+            buttons,
+            text="Коррекция запястья",
+            command=self._apply_wrist_correction,
+            state=tk.DISABLED,
+        )
+        self.wrist_correction_button.pack(side=tk.LEFT)
         ttk.Label(frame, textvariable=self.status_var).pack(anchor=tk.W)
 
     def _build_midpoint_block(
@@ -303,6 +317,7 @@ class CylinderWallSection:
         self.finish_x_var.set(format_number(float(data.get("finish_x_mm", 0.0))))
         self.finish_y_var.set(format_number(float(data.get("finish_y_mm", 0.0))))
         self.finish_z_var.set(format_number(float(data.get("finish_z_mm", 0.0))))
+        self.lcorr_var.set(format_number(float(data.get("lcorr_mm", 0.0))))
 
         trajectory = self.app.get_trajectory(self.generator_id)
         local = self.app.get_local_trajectory(self.generator_id)
@@ -389,6 +404,7 @@ class CylinderWallSection:
         params = self._read_params(require_passes=True)
         data = params.to_dict()
         data.update(self._read_trajectory_points_dict())
+        data["lcorr_mm"] = parse_float(self.lcorr_var.get(), "Lcorr")
         self.app.project.cylinder_wall = data
 
     def _parse_start_sector(self) -> int:
@@ -560,6 +576,7 @@ class CylinderWallSection:
         state = tk.NORMAL if enabled else tk.DISABLED
         self.export_step_button.configure(state=state)
         self.export_robot_button.configure(state=state)
+        self.wrist_correction_button.configure(state=state)
 
     def _export_step(self) -> None:
         trajectory = self.app.get_trajectory(self.generator_id)
@@ -605,3 +622,24 @@ class CylinderWallSection:
             return
 
         messagebox.showinfo("Создать УП", f"Файл сохранён:\n{filepath}")
+
+    def _apply_wrist_correction(self) -> None:
+        trajectory = self.app.get_trajectory(self.generator_id)
+        if trajectory is None:
+            messagebox.showwarning("Коррекция запястья", "Сначала создайте траекторию.")
+            return
+
+        project_root = Path(__file__).resolve().parents[3]
+        try:
+            lcorr_mm = parse_float(self.lcorr_var.get(), "Lcorr")
+            outputs = run_cylinder_wrist_correction(
+                project_root,
+                trajectory=trajectory,
+                robot_settings=self.app.form_common.robot_export_settings(),
+                lcorr_mm=lcorr_mm,
+            )
+        except Exception as error:
+            messagebox.showerror("Коррекция запястья", str(error))
+            return
+
+        messagebox.showinfo("Коррекция запястья", format_wrist_correction_summary(outputs))

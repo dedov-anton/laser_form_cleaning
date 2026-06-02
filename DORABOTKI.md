@@ -4,6 +4,51 @@
 
 ---
 
+## 2026-06-02 — Коррекция запястья cylinder_wall, Lcorr, наклоны, RPY Elite
+
+### Задачи
+
+1. **Ориентация УП Elite** — на реальном роботе `rx=ry=rz=0` соответствует инструменту строго вниз; экспорт RPY из 6D должен совпадать с калибровкой (`УП/test_vertical_down.txt`), а не с ошибочной схемой rotvec.
+2. **Касательная пути** — `tool_axis_x` на цилиндре должен следовать направлению вертикального прохода (top → profile → bottom), а не быть константой.
+3. **Экспериментальная коррекция запястья** — лазер на голове отведён на 90°: отдельный pipeline (не в основном «Создать УП») для перевода ориентации «радиаль → вертикаль вверх» + JSON / STEP / УП.
+4. **Смещение TCP (Lcorr)** — физический TCP не в точке касания луча на стенке: `P' = P + Lcorr·inward + Lcorr·Z`, линии прохода на стенке не сдвигаются.
+5. **Наклоны и промежуточные точки** — после коррекции запястья сохранить tilt из генератора (в плоскости радиаль–Z он становится «вперёд/назад» относительно вертикали) и все стопы `work_profile_*`.
+
+### Проблемы и как решали
+
+| Проблема | Решение |
+|----------|---------|
+| RPY на роботе «ломались» (например `ry≈3.14` вместо ~0) | `rotation_matrix_to_rpy` по соглашению bk (`column_stack`); `tcp_z = -tool_axis_z` под калибровку vertical-down |
+| Глобальный поворот RPY `(1.57,0,-1.57)→(3.14,0,1.57)` на всю траекторию давал бессмыслицу в STEP | Отказ от глобальной RPY-коррекции; геометрический поворот **per pose** в `wrist_correction.py` |
+| Коррекция сбрасывала `top_tilt` / profile tilt | Поворот всего кадра: **outward → (0,0,+1)** применяется к `tool_axis_z` и `tool_axis_x`, а не `tool_axis_z = (0,0,1)` |
+| Ось поворота была `inward` вместо луча наружу | `outward_direction_from_axis` = от оси к стенке; Rodrigues от outward к вертикали |
+| TCP не совпадает с точкой луча на стенке | Параметр **Lcorr (мм)** в GUI cylinder_wall, `project.cylinder_wall["lcorr_mm"]`, смещение только work-поз |
+| Траектории раздували `project.json` | Файлы в `config/trajectories/{id}.json`, в проекте — пути `trajectory_files` |
+
+### Решение (реализация)
+
+- `src/exporters/robot/orientation.py` — исправленный RPY + mount rotation из GUI.
+- `src/generators/cylinder_wall/calc.py` — `tool_axis_x` из `stop_path_tangent`.
+- `src/transforms/wrist_correction.py` — radial→vertical upward, Lcorr, сохранение tilt через поворот кадра.
+- `src/transforms/wrist_correction_export.py` — JSON + STEP + УП; `scripts/apply_wrist_correction.py`.
+- GUI: кнопка «Коррекция запястья», поле Lcorr; выход: `cylinder_wall_wrist_corrected.*`.
+- `src/storage/project_store.py` — внешние JSON траекторий, миграция embedded при save.
+- Тесты: `tests/transforms/test_wrist_correction.py`, обновлены robot/cylinder tests.
+
+### Итог
+
+- [x] УП cylinder_wall: осмысленные RPY при вертикальной калибровке TCP.
+- [x] Коррекция запястья (эксперимент): ориентация вверх, Lcorr, tilt и profile-стопы сохраняются.
+- [x] **85 passed** (полный pytest).
+- [ ] Сверка на реальном роботе с разными Lcorr и наклонами — по результатам прогона пользователя.
+
+### Отложено
+
+- Включение коррекции запястья в основной «Создать УП» (пока только отдельная кнопка / скрипт).
+- `top_ring` — коррекция запястья не делалась.
+
+---
+
 ## 2026-06-01 — Модульная архитектура + перенос траектории по 6D-позе
 
 ### Задачи

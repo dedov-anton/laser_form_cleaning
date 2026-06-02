@@ -4,7 +4,7 @@ import math
 from typing import List
 
 from src.common.geometry import DEFAULT_TOOL_AXIS_Z, Point3, Pose6D, TravelSegment
-from src.common.tool_orientation import orthogonal_tool_axis_x, tilt_tool_axis_radial
+from src.common.tool_orientation import normalize_vector, orthogonal_tool_axis_x, tilt_tool_axis_radial
 from src.generators.cylinder_wall.models import CylinderTrajectory, PassStop, VerticalPass
 from src.generators.cylinder_wall.params import (
     SECTOR_COUNT,
@@ -178,14 +178,36 @@ def build_travel_segments(
     return segments
 
 
+def _subtract(a: Point3, b: Point3) -> Point3:
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+
+def _add(a: Point3, b: Point3) -> Point3:
+    return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
+
+
+def stop_path_tangent(stops: List[PassStop], index: int) -> Point3:
+    """Path tangent at stop index (same logic as welding_path_generator_bk curr_tangent)."""
+    if index == 0:
+        direction = _subtract(stops[1].position, stops[0].position)
+    elif index == len(stops) - 1:
+        direction = _subtract(stops[-1].position, stops[-2].position)
+    else:
+        prev = normalize_vector(_subtract(stops[index].position, stops[index - 1].position))
+        next_seg = normalize_vector(_subtract(stops[index + 1].position, stops[index].position))
+        direction = _add(prev, next_seg)
+    return normalize_vector(direction)
+
+
 def build_cylinder_work_pose(
     index: int,
     pose_type: str,
     position: Point3,
     tilt_deg: float,
+    path_tangent: Point3,
 ) -> Pose6D:
     tool_axis_z = tilt_tool_axis_radial(position, tilt_deg)
-    tool_axis_x = orthogonal_tool_axis_x(VERTICAL_DOWN, tool_axis_z)
+    tool_axis_x = orthogonal_tool_axis_x(path_tangent, tool_axis_z)
     return Pose6D(
         index=index,
         pose_type=pose_type,
@@ -219,13 +241,16 @@ def build_poses(
     poses: List[Pose6D] = [build_pose(0, "start", start_point_mm)]
 
     for vertical_pass in ordered_passes:
-        for stop in vertical_pass.stops:
+        stops = vertical_pass.stops
+        for stop_index, stop in enumerate(stops):
+            path_tangent = stop_path_tangent(stops, stop_index)
             poses.append(
                 build_cylinder_work_pose(
                     len(poses),
                     stop.pose_type,
                     stop.position,
                     stop.tilt_deg,
+                    path_tangent,
                 )
             )
 

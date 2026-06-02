@@ -76,6 +76,28 @@ def rotation_matrix_sxyz(rx_deg: float, ry_deg: float, rz_deg: float) -> Matrix3
     return _multiply_matrix(_rotation_z(rz), _multiply_matrix(_rotation_y(ry), _rotation_x(rx)))
 
 
+def rpy_from_rotation_matrix_sxyz(rotation: Matrix3) -> tuple[float, float, float]:
+    """Inverse of rotation_matrix_sxyz; returns (rx, ry, rz) in radians."""
+    sy = math.sqrt(rotation[0][0] ** 2 + rotation[1][0] ** 2)
+    if sy > 1e-6:
+        rx = math.atan2(rotation[2][1], rotation[2][2])
+        ry = math.atan2(-rotation[2][0], sy)
+        rz = math.atan2(rotation[1][0], rotation[0][0])
+    else:
+        rx = math.atan2(-rotation[1][2], rotation[1][1])
+        ry = math.atan2(-rotation[2][0], sy)
+        rz = 0.0
+    return rx, ry, rz
+
+
+def rotation_matrix_sxyz_rad(rx_rad: float, ry_rad: float, rz_rad: float) -> Matrix3:
+    return rotation_matrix_sxyz(
+        math.degrees(rx_rad),
+        math.degrees(ry_rad),
+        math.degrees(rz_rad),
+    )
+
+
 def transform_point(point: Point3, rotation: Matrix3, translation: Point3) -> Point3:
     return (
         rotation[0][0] * point[0] + rotation[0][1] * point[1] + rotation[0][2] * point[2] + translation[0],

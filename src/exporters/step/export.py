@@ -81,10 +81,11 @@ def _fill_writer(writer, trajectory: WorkTrajectory) -> None:
         writer.add_line(pose.position, radial_end, TOOL_VIS_COLOR, "tool_axis")
 
 
-def export_trajectory(trajectory: WorkTrajectory, filepath: Path) -> None:
+def export_trajectory(trajectory: WorkTrajectory, filepath: Path | str) -> None:
+    path = Path(filepath)
     writer = XcafStepWriter() if _XCAF_AVAILABLE else StepWriter()
     _fill_writer(writer, trajectory)
-    writer.write(filepath)
+    writer.write(path)
 
 
 # Backward-compatible alias.

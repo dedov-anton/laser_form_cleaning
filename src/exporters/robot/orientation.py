@@ -4,7 +4,6 @@ import math
 from typing import Tuple
 
 from src.common.geometry import Point3
-from src.exporters.robot.settings import TOOL_ROTATION_CORRECTION_RAD
 
 RollPitchYaw = Tuple[float, float, float]
 
@@ -28,20 +27,27 @@ def _cross(a: Point3, b: Point3) -> Point3:
     )
 
 
-def rotation_matrix_to_rpy(rotation: Tuple[Tuple[float, float, float], ...]) -> RollPitchYaw:
-    """Extract roll, pitch, yaw (radians) from rotation matrix columns X, Y, Z."""
-    r00, r10, r20 = rotation[0][0], rotation[1][0], rotation[2][0]
-    r21, r22 = rotation[2][1], rotation[2][2]
-    r11, r12 = rotation[1][1], rotation[1][2]
+def _project_on_plane(vector: Point3, plane_normal: Point3) -> Point3:
+    normal = _normalize(plane_normal)
+    projection = _dot(vector, normal)
+    return (
+        vector[0] - projection * normal[0],
+        vector[1] - projection * normal[1],
+        vector[2] - projection * normal[2],
+    )
 
-    sy = math.sqrt(r00 ** 2 + r10 ** 2)
+
+def rotation_matrix_to_rpy(rotation: Tuple[Tuple[float, float, float], ...]) -> RollPitchYaw:
+    """Extract roll, pitch, yaw (radians); rotation rows are basis columns like bk column_stack."""
+    x_vec, y_vec, z_vec = rotation[0], rotation[1], rotation[2]
+    sy = math.sqrt(x_vec[0] ** 2 + x_vec[1] ** 2)
     if sy > 1e-6:
-        roll = math.atan2(r21, r22)
-        pitch = math.atan2(-r20, sy)
-        yaw = math.atan2(r10, r00)
+        roll = math.atan2(y_vec[2], z_vec[2])
+        pitch = math.atan2(-x_vec[2], sy)
+        yaw = math.atan2(x_vec[1], x_vec[0])
     else:
-        roll = math.atan2(-r12, r11)
-        pitch = math.atan2(-r20, sy)
+        roll = math.atan2(-z_vec[1], y_vec[1])
+        pitch = math.atan2(-x_vec[2], sy)
         yaw = 0.0
     return roll, pitch, yaw
 
@@ -49,26 +55,23 @@ def rotation_matrix_to_rpy(rotation: Tuple[Tuple[float, float, float], ...]) -> 
 def calculate_orientation(
     tool_vector: Point3,
     segment_direction: Point3,
-    additional_rotation: float = 0.0,
+    mount_rotation_rad: float = 0.0,
 ) -> RollPitchYaw:
     """
-    Build tool orientation (roll, pitch, yaw in radians) from tool Z axis and motion direction.
+    Build tool orientation (roll, pitch, yaw in radians) from TCP +Z and motion direction.
 
-    Ported from welding_path_generator_bk.py — Static XYZ convention with -90° roll correction.
+    tool_vector — TCP +Z axis in world frame (not beam direction).
+    mount_rotation_rad — rotation around tool Z before RPY extraction (head mount).
     """
     z_axis = _normalize(tool_vector)
-    x_proj = (
-        segment_direction[0] - _dot(segment_direction, z_axis) * z_axis[0],
-        segment_direction[1] - _dot(segment_direction, z_axis) * z_axis[1],
-        segment_direction[2] - _dot(segment_direction, z_axis) * z_axis[2],
-    )
+    x_proj = _project_on_plane(segment_direction, z_axis)
     if math.sqrt(x_proj[0] ** 2 + x_proj[1] ** 2 + x_proj[2] ** 2) < 1e-6:
         x_proj = (1.0, 0.0, 0.0)
     x_axis = _normalize(x_proj)
     y_axis = _normalize(_cross(z_axis, x_axis))
 
-    cos_r = math.cos(additional_rotation + TOOL_ROTATION_CORRECTION_RAD)
-    sin_r = math.sin(additional_rotation + TOOL_ROTATION_CORRECTION_RAD)
+    cos_r = math.cos(mount_rotation_rad)
+    sin_r = math.sin(mount_rotation_rad)
     x_axis_rot = (
         x_axis[0] * cos_r + y_axis[0] * sin_r,
         x_axis[1] * cos_r + y_axis[1] * sin_r,
@@ -85,3 +88,20 @@ def calculate_orientation(
         z_axis,
     )
     return rotation_matrix_to_rpy(rotation)
+
+
+def pose_to_elite_rpy(
+    tool_axis_z: Point3,
+    tool_axis_x: Point3,
+    mount_rotation_rad: float,
+) -> RollPitchYaw:
+    """
+    Convert Pose6D tool axes to Elite rx, ry, rz.
+
+    tool_axis_z — laser beam into the surface (trajectory / STEP convention).
+    tool_axis_x — X axis of the 6D frame stored in the pose (STEP radial arrow).
+    mount_rotation_rad — physical head mount rotation around tool Z.
+    """
+    tcp_z = (-tool_axis_z[0], -tool_axis_z[1], -tool_axis_z[2])
+    roll, pitch, yaw = calculate_orientation(tcp_z, tool_axis_x, mount_rotation_rad)
+    return roll, pitch, yaw

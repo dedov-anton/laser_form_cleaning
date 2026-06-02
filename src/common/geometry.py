@@ -26,6 +26,12 @@ def approach_line(position: Point3, tool_axis_z: Point3, length_mm: float) -> Tu
 
 @dataclass
 class Pose6D:
+    """6D tool pose at a trajectory stop.
+
+    tool_axis_z — laser beam direction into the surface (STEP / trajectory convention).
+    tool_axis_x — path tangent at the stop, projected onto the plane perpendicular to tool_axis_z.
+    """
+
     index: int
     pose_type: str
     position: Point3

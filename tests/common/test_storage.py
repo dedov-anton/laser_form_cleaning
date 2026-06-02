@@ -7,7 +7,7 @@ from src.common.project import FormProject
 from src.generators.bottom_ring.params import BottomRingParams
 from src.generators.bottom_ring.adapter import to_work_trajectory
 from src.generators.bottom_ring.calc import build_trajectory
-from src.storage.project_store import load_project, save_project, store_trajectory
+from src.storage.project_store import load_project, load_trajectory, save_project, store_trajectory
 from src.storage.trajectory_codec import trajectory_from_dict, trajectory_to_dict
 
 
@@ -41,12 +41,14 @@ class ProjectStoreTests(unittest.TestCase):
                 beam_width_mm=100.0,
                 sector_count=4,
             )
-            store_trajectory(project, "bottom_ring", to_work_trajectory(build_trajectory(params), params))
+            store_trajectory(project, "bottom_ring", to_work_trajectory(build_trajectory(params), params), root)
             save_project(project, root)
 
             loaded = load_project(root)
             self.assertEqual(loaded.beam_width_mm, 100.0)
-            self.assertIsNotNone(loaded.trajectories["bottom_ring"])
+            self.assertIsNone(loaded.trajectories["bottom_ring"])
+            self.assertEqual(loaded.trajectory_files["bottom_ring"], "trajectories/bottom_ring.json")
+            self.assertIsNotNone(load_trajectory(loaded, "bottom_ring", root))
 
     def test_migrate_legacy_last_params(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

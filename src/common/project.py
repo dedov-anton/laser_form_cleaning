@@ -8,6 +8,8 @@ DEFAULT_POINT_MM = 0.0
 DEFAULT_ROBOT_BLEND_RADIUS_MM = 0.001
 DEFAULT_ROBOT_VELOCITY = 0.03
 DEFAULT_ROBOT_ACCELERATION = 0.05
+DEFAULT_ROBOT_IP = "192.168.1.12"
+DEFAULT_TOOL_MOUNT_ROTATION_DEG = 0.0
 PROJECT_VERSION = "1"
 
 
@@ -30,6 +32,8 @@ class FormProject:
     robot_blend_radius_mm: float = DEFAULT_ROBOT_BLEND_RADIUS_MM
     robot_velocity: float = DEFAULT_ROBOT_VELOCITY
     robot_acceleration: float = DEFAULT_ROBOT_ACCELERATION
+    robot_ip: str = DEFAULT_ROBOT_IP
+    tool_mount_rotation_deg: float = DEFAULT_TOOL_MOUNT_ROTATION_DEG
     bottom_ring: Dict[str, Any] = field(default_factory=dict)
     top_ring: Dict[str, Any] = field(default_factory=dict)
     cylinder_wall: Dict[str, Any] = field(default_factory=dict)
@@ -41,6 +45,20 @@ class FormProject:
         }
     )
     trajectories_local: Dict[str, Optional[dict]] = field(
+        default_factory=lambda: {
+            "bottom_ring": None,
+            "top_ring": None,
+            "cylinder_wall": None,
+        }
+    )
+    trajectory_files: Dict[str, Optional[str]] = field(
+        default_factory=lambda: {
+            "bottom_ring": None,
+            "top_ring": None,
+            "cylinder_wall": None,
+        }
+    )
+    trajectory_files_local: Dict[str, Optional[str]] = field(
         default_factory=lambda: {
             "bottom_ring": None,
             "top_ring": None,

@@ -4,7 +4,7 @@ from typing import List, Tuple
 
 from src.common.geometry import Point3, Pose6D
 from src.common.trajectory import WorkTrajectory
-from src.exporters.robot.orientation import RollPitchYaw, calculate_orientation
+from src.exporters.robot.orientation import RollPitchYaw, pose_to_elite_rpy
 from src.exporters.robot.settings import RobotExportSettings
 
 Pose6 = Tuple[float, float, float, float, float, float]
@@ -12,19 +12,6 @@ Pose6 = Tuple[float, float, float, float, float, float]
 
 class RobotExportError(ValueError):
     pass
-
-
-def _segment_direction(current: Pose6D, next_pose: Pose6D | None) -> Point3:
-    if next_pose is not None:
-        delta = (
-            next_pose.position[0] - current.position[0],
-            next_pose.position[1] - current.position[1],
-            next_pose.position[2] - current.position[2],
-        )
-        length = (delta[0] ** 2 + delta[1] ** 2 + delta[2] ** 2) ** 0.5
-        if length > 1e-6:
-            return delta
-    return current.tool_axis_x
 
 
 def _work_poses(trajectory: WorkTrajectory) -> List[Pose6D]:
@@ -36,12 +23,14 @@ def _work_poses(trajectory: WorkTrajectory) -> List[Pose6D]:
     return work
 
 
-def _build_work_targets(work_poses: List[Pose6D]) -> List[Tuple[Point3, RollPitchYaw]]:
+def _build_work_targets(
+    work_poses: List[Pose6D],
+    settings: RobotExportSettings,
+) -> List[Tuple[Point3, RollPitchYaw]]:
+    mount_rad = settings.tool_mount_rotation_rad
     targets: List[Tuple[Point3, RollPitchYaw]] = []
-    for index, pose in enumerate(work_poses):
-        next_pose = work_poses[index + 1] if index + 1 < len(work_poses) else None
-        segment = _segment_direction(pose, next_pose)
-        rpy = calculate_orientation(pose.tool_axis_z, segment)
+    for pose in work_poses:
+        rpy = pose_to_elite_rpy(pose.tool_axis_z, pose.tool_axis_x, mount_rad)
         targets.append((pose.position, rpy))
     return targets
 
@@ -66,7 +55,7 @@ def _mm_to_m(point: Point3) -> Point3:
 
 
 def build_elite_program(trajectory: WorkTrajectory, settings: RobotExportSettings) -> str:
-    work_targets = _build_work_targets(_work_poses(trajectory))
+    work_targets = _build_work_targets(_work_poses(trajectory), settings)
 
     first_rpy = work_targets[0][1]
     start_m = _mm_to_m(trajectory.start_point_mm)
