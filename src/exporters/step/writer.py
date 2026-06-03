@@ -30,6 +30,9 @@ START_POINT_COLOR = RgbColor(1.0, 0.0, 1.0)
 FINISH_POINT_COLOR = RgbColor(0.0, 0.8, 1.0)
 REFERENCE_COLOR = RgbColor(0.5, 0.5, 0.5)
 TOOL_VIS_COLOR = RgbColor(0.8, 0.0, 0.8)
+TOOL_AXIS_Z_COLOR = RgbColor(0.0, 0.6, 1.0)
+TCP_POINT_COLOR = RgbColor(1.0, 0.85, 0.0)
+TCP_PATH_COLOR = RgbColor(0.0, 0.75, 0.2)
 POINT_MARKER_SIZE_MM = 10.0
 
 # OCCT схлопывает «канонические» RGB в DRAUGHTING_PRE_DEFINED_COLOUR;

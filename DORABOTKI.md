@@ -4,6 +4,42 @@
 
 ---
 
+## 2026-06-02 — Тестовая УП: дуга кольца movec (фаза 1)
+
+### Задача
+
+Очистка верх/низ кольца по **дуге** (`movec`), а не только радиальными `movel`. Из‑за 6 осей полный круг — двумя полуокружностями (фаза 2). Сейчас — **одна** тестовая дуга CW **180° → 90° → 0°** по средней линии кольца для проверки на роботе.
+
+### Решение
+
+- [`src/exporters/robot/ring_arc.py`](src/exporters/robot/ring_arc.py) — центр из `frame_pose_applied`, радиус `inner + ring_width/2`, касательная CW, заготовка `arc_track_radii_mm` для нескольких дорожек.
+- [`build_ring_movec_test_program`](src/exporters/robot/elite_program.py) — `movel` на 180°, `movec(p_via, p_to, a, v, r, mode)` via 90° → 0° (`mode=0` фикс., без параметра `t` по CS Script Manual §2.1.2), возврат на 180°.
+- [`scripts/build_ring_movec_test_up.py`](scripts/build_ring_movec_test_up.py) — читает [`config/trajectories/bottom_ring.json`](config/trajectories/bottom_ring.json).
+- Выход: [`УП/test_ring_movec_180_to_0.txt`](УП/test_ring_movec_180_to_0.txt).
+
+### Запуск
+
+```bash
+python scripts/build_ring_movec_test_up.py
+```
+
+### Фаза 2 (2026-06-02) — GUI и полная УП дугами
+
+- [x] Секция «Низ формы»: строка **«Дуги: …»** (1 проход или N + перекрытие мм/%), цвет как у секторов.
+- [x] Кнопка **«Создать УП дугами»** → [`export_ring_arc_program`](src/exporters/robot/export.py).
+- [x] [`plan_arc_passes`](src/exporters/robot/ring_arc.py) + [`build_ring_arc_program`](src/exporters/robot/elite_program.py): на каждый радиус CW (180→90→0) и CCW (180→270→0).
+- [ ] `top_ring` — после появления генератора.
+- [ ] STEP для дуг.
+
+### Поза из GUI, старт/финиш без переноса (2026-06-02)
+
+- **Дуговая УП** не требует «Создать траекторию» / «Переместить»: геометрия из **6D позы** в шапке GUI + параметры кольца; старт/финиш из полей секции (мм, как в `project.json`).
+- [`build_ring_arc_geometry`](src/exporters/robot/ring_arc.py) — дуга в локальной СК кольца, перенос `transform_point` / `transform_vector` с полным Rx Ry Rz.
+- [`transform_work_trajectory`](src/transforms/trajectory_transform.py) — старт/финиш и соответствующие концы `approach`/`departure` **не** переносятся; рабочие точки и дуги — переносятся.
+- Радиальная «Создать УП» подставляет старт/финиш из GUI в момент экспорта ([`apply_program_start_finish`](src/transforms/trajectory_transform.py)).
+
+---
+
 ## 2026-06-02 — Коррекция запястья cylinder_wall, Lcorr, наклоны, RPY Elite
 
 ### Задачи
@@ -11,7 +47,7 @@
 1. **Ориентация УП Elite** — на реальном роботе `rx=ry=rz=0` соответствует инструменту строго вниз; экспорт RPY из 6D должен совпадать с калибровкой (`УП/test_vertical_down.txt`), а не с ошибочной схемой rotvec.
 2. **Касательная пути** — `tool_axis_x` на цилиндре должен следовать направлению вертикального прохода (top → profile → bottom), а не быть константой.
 3. **Экспериментальная коррекция запястья** — лазер на голове отведён на 90°: отдельный pipeline (не в основном «Создать УП») для перевода ориентации «радиаль → вертикаль вверх» + JSON / STEP / УП.
-4. **Смещение TCP (Lcorr)** — физический TCP не в точке касания луча на стенке: `P' = P + Lcorr·inward + Lcorr·Z`, линии прохода на стенке не сдвигаются.
+4. **Смещение TCP (Lcorr)** — от точки на стенке: `Lcorr` вдоль наклонённого луча (`−tool_axis_z`) к оси, затем `Lcorr` по направлению «вверх», перпендикулярному лучу в плоскости луч–Z (`tcp_position_after_lcorr` в `wrist_correction.py`). Точки на стенке в `work_segments` не сдвигаются.
 5. **Наклоны и промежуточные точки** — после коррекции запястья сохранить tilt из генератора (в плоскости радиаль–Z он становится «вперёд/назад» относительно вертикали) и все стопы `work_profile_*`.
 
 ### Проблемы и как решали
@@ -22,7 +58,8 @@
 | Глобальный поворот RPY `(1.57,0,-1.57)→(3.14,0,1.57)` на всю траекторию давал бессмыслицу в STEP | Отказ от глобальной RPY-коррекции; геометрический поворот **per pose** в `wrist_correction.py` |
 | Коррекция сбрасывала `top_tilt` / profile tilt | Поворот всего кадра: **outward → (0,0,+1)** применяется к `tool_axis_z` и `tool_axis_x`, а не `tool_axis_z = (0,0,1)` |
 | Ось поворота была `inward` вместо луча наружу | `outward_direction_from_axis` = от оси к стенке; Rodrigues от outward к вертикали |
-| TCP не совпадает с точкой луча на стенке | Параметр **Lcorr (мм)** в GUI cylinder_wall, `project.cylinder_wall["lcorr_mm"]`, смещение только work-поз |
+| TCP не совпадает с точкой луча на стенке | **Lcorr (мм)** в GUI: двухшаговое смещение по `tool_axis_z` (с наклоном) и перпендикуляру в плоскости луч–Z; не горизонтальный inward + Z |
+| STEP после коррекции запястья не совпадал с УП | STEP только из УП: точки `pose_work_*` + одна стрелка TCP+Z из `rx,ry,rz`, без линий между точками (`from_elite_program.py`) |
 | Траектории раздували `project.json` | Файлы в `config/trajectories/{id}.json`, в проекте — пути `trajectory_files` |
 
 ### Решение (реализация)
@@ -35,11 +72,33 @@
 - `src/storage/project_store.py` — внешние JSON траекторий, миграция embedded при save.
 - Тесты: `tests/transforms/test_wrist_correction.py`, обновлены robot/cylinder tests.
 
+### STEP после коррекции — только по УП (2026-06-02)
+
+Эталон для проверки траектории — **УП Elite**, не оси `tool_axis_x/z` из JSON.
+
+**Pipeline** ([`wrist_correction_export.py`](src/transforms/wrist_correction_export.py)):
+
+1. `build_elite_program(corrected, robot_settings)` — тот же код, что «Создать УП».
+2. Запись [`УП/cylinder_wall_wrist_corrected.txt`](УП/cylinder_wall_wrist_corrected.txt).
+3. [`export_step_from_elite_program(program)`](src/exporters/step/from_elite_program.py) — парсинг `pose_work_N = [x,y,z,rx,ry,rz]` (м, рад).
+
+**В STEP рисуется только:**
+
+- маркер TCP (координаты из строки УП, мм);
+- одна стрелка — **TCP +Z** из `rx,ry,rz` ([`rpy_to_rotation_rows`](src/exporters/robot/orientation.py)).
+
+**Не рисуется:** линии между точками, travel/work/reference, оси из JSON.
+
+**Обычный STEP** (без `wrist_correction_applied`) — без изменений ([`export_trajectory`](src/exporters/step/export.py)). Прямой экспорт corrected JSON в старый STEP запрещён (ошибка с подсказкой).
+
+**Тесты:** [`tests/exporters/test_step_wrist_corrected.py`](tests/exporters/test_step_wrist_corrected.py).
+
 ### Итог
 
 - [x] УП cylinder_wall: осмысленные RPY при вертикальной калибровке TCP.
 - [x] Коррекция запястья (эксперимент): ориентация вверх, Lcorr, tilt и profile-стопы сохраняются.
-- [x] **85 passed** (полный pytest).
+- [x] STEP после коррекции совпадает с УП (точка + вектор TCP+Z, без переходов).
+- [x] Полный pytest: **104+ passed** (1 старый fail в `test_geometry_from_bottom_ring_json`, z фикстуры).
 - [ ] Сверка на реальном роботе с разными Lcorr и наклонами — по результатам прогона пользователя.
 
 ### Отложено

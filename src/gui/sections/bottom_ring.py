@@ -5,7 +5,8 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import TYPE_CHECKING, Callable, Optional
 
-from src.exporters.robot.export import export_robot_program
+from src.exporters.robot.export import export_ring_arc_program, export_robot_program
+from src.exporters.robot.ring_arc import arc_pass_summary_text, plan_arc_passes
 from src.exporters.step.export import export_trajectory
 from src.generators.bottom_ring.params import BottomRingParams, ProfileWaypoint
 from src.generators.bottom_ring.calc import (
@@ -26,7 +27,10 @@ from src.gui.parsing import (
 )
 from src.gui.widgets.profile_canvas import ProfileCanvas
 from src.storage.project_store import store_local_trajectory, store_trajectory
-from src.transforms.trajectory_transform import transform_work_trajectory
+from src.transforms.trajectory_transform import (
+    apply_program_start_finish,
+    transform_work_trajectory,
+)
 
 if TYPE_CHECKING:
     from src.gui.app import TrajectoryApp
@@ -43,6 +47,7 @@ class BottomRingSection:
         self.sector_count_var = tk.StringVar()
         self.overlap_outer_var = tk.StringVar(value="—")
         self.overlap_inner_var = tk.StringVar(value="—")
+        self.arc_pass_var = tk.StringVar(value="Дуги: —")
         self.status_var = tk.StringVar(value="Траектория: не создана")
         self.entry_sector_start_var = tk.StringVar()
         self.entry_sector_end_var = tk.StringVar()
@@ -93,6 +98,8 @@ class BottomRingSection:
         ttk.Label(clean_frame, textvariable=self.overlap_inner_var).grid(
             row=2, column=0, columnspan=2, sticky=tk.W, pady=2
         )
+        self.arc_pass_label = ttk.Label(clean_frame, textvariable=self.arc_pass_var)
+        self.arc_pass_label.grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=2)
 
         entry_frame = ttk.LabelFrame(frame, text="Сектор O→I (° 0–360)", padding=8)
         entry_frame.pack(fill=tk.X, pady=(0, 8))
@@ -143,7 +150,11 @@ class BottomRingSection:
         self.profile_canvas.pack()
         self.profile_canvas.bind("<Configure>", lambda _e: self._update_profile_preview())
 
-        points_frame = ttk.LabelFrame(frame, text="Старт / финиш (мм)", padding=8)
+        points_frame = ttk.LabelFrame(
+            frame,
+            text="Старт / финиш (мм) — координаты УП, без переноса по 6D позе",
+            padding=8,
+        )
         points_frame.pack(fill=tk.X, pady=(0, 8))
         start_row = ttk.Frame(points_frame)
         start_row.pack(fill=tk.X, pady=2)
@@ -175,7 +186,14 @@ class BottomRingSection:
         self.export_robot_button = ttk.Button(
             buttons, text="Создать УП", command=self._export_robot, state=tk.DISABLED
         )
-        self.export_robot_button.pack(side=tk.LEFT)
+        self.export_robot_button.pack(side=tk.LEFT, padx=(0, 8))
+        self.export_robot_arc_button = ttk.Button(
+            buttons,
+            text="Создать УП дугами",
+            command=self._export_robot_arc,
+            state=tk.DISABLED,
+        )
+        self.export_robot_arc_button.pack(side=tk.LEFT)
         ttk.Label(frame, textvariable=self.status_var).pack(anchor=tk.W)
 
     def _build_midpoint_block(
@@ -290,6 +308,7 @@ class BottomRingSection:
             self.status_var.set(self._format_status(trajectory) + suffix)
 
         self._update_derived_fields()
+        self._update_arc_export_state()
         self._update_profile_preview()
 
     def save_params_to_project(self) -> None:
@@ -400,9 +419,14 @@ class BottomRingSection:
             self.overlap_outer_var.set("Перекрытие на внешнем: —")
             self.overlap_inner_var.set("Перекрытие на внутреннем: —")
             self.overlap_outer_label.configure(foreground="")
+            self.arc_pass_var.set("Дуги: —")
+            self.arc_pass_label.configure(foreground="")
+            self._update_arc_export_state()
             return
 
         self.outer_radius_var.set(format_number(params.outer_radius_mm))
+        self._update_arc_pass_fields(params)
+        self._update_arc_export_state()
 
         if not self.sector_count_var.get().strip():
             return
@@ -413,6 +437,7 @@ class BottomRingSection:
             self.overlap_outer_var.set("Перекрытие на внешнем: —")
             self.overlap_inner_var.set("Перекрытие на внутреннем: —")
             self.overlap_outer_label.configure(foreground="")
+            self._update_arc_pass_fields(params)
             return
 
         overlap_outer = overlap_mm(
@@ -432,6 +457,35 @@ class BottomRingSection:
         )
         self.overlap_inner_var.set(f"Перекрытие на внутреннем: {overlap_inner:.2f} мм")
         self._set_overlap_color(overlap_outer, params_with_sectors.beam_width_mm)
+        self._update_arc_pass_fields(params_with_sectors)
+
+    def _update_arc_pass_fields(self, params: BottomRingParams) -> None:
+        try:
+            plan = plan_arc_passes(
+                params.inner_radius_mm,
+                params.ring_width_mm,
+                params.beam_width_mm,
+            )
+        except ValueError:
+            self.arc_pass_var.set("Дуги: —")
+            self.arc_pass_label.configure(foreground="")
+            self._update_arc_export_state()
+            return
+
+        self.arc_pass_var.set(arc_pass_summary_text(plan, params.beam_width_mm))
+        if plan.single_pass:
+            self.arc_pass_label.configure(foreground="green")
+        else:
+            self._set_arc_overlap_color(plan.overlap_mm, params.beam_width_mm)
+
+    def _set_arc_overlap_color(self, overlap_mm: float, beam_width: float) -> None:
+        if overlap_mm < 0:
+            color = "red"
+        elif overlap_mm < 0.1 * beam_width:
+            color = "#b8860b"
+        else:
+            color = "green"
+        self.arc_pass_label.configure(foreground=color)
 
     def _set_overlap_color(self, overlap_outer: float, beam_width: float) -> None:
         if overlap_outer < 0:
@@ -525,6 +579,19 @@ class BottomRingSection:
         self.export_step_button.configure(state=state)
         self.export_robot_button.configure(state=state)
 
+    def _update_arc_export_state(self) -> None:
+        try:
+            params = self._read_params(require_sector_count=False)
+            plan_arc_passes(
+                params.inner_radius_mm,
+                params.ring_width_mm,
+                params.beam_width_mm,
+            )
+        except ValueError:
+            self.export_robot_arc_button.configure(state=tk.DISABLED)
+            return
+        self.export_robot_arc_button.configure(state=tk.NORMAL)
+
     def _export_step(self) -> None:
         trajectory = self.app.get_trajectory(self.generator_id)
         if trajectory is None:
@@ -562,6 +629,8 @@ class BottomRingSection:
             return
 
         try:
+            start_point, finish_point = self._read_trajectory_points()
+            trajectory = apply_program_start_finish(trajectory, start_point, finish_point)
             settings = self.app.form_common.robot_export_settings()
             export_robot_program(trajectory, Path(filepath), settings)
         except Exception as error:
@@ -569,3 +638,47 @@ class BottomRingSection:
             return
 
         messagebox.showinfo("Создать УП", f"Файл сохранён:\n{filepath}")
+
+    def _export_robot_arc(self) -> None:
+        filepath = filedialog.asksaveasfilename(
+            title="Сохранить УП дугами — низ формы",
+            defaultextension=".txt",
+            initialfile="bottom_ring_arc.txt",
+            filetypes=[("All files", "*.*")],
+        )
+        if not filepath:
+            return
+
+        try:
+            params = self._read_params(require_sector_count=False)
+            start_point, finish_point = self._read_trajectory_points()
+            plan = plan_arc_passes(
+                params.inner_radius_mm,
+                params.ring_width_mm,
+                params.beam_width_mm,
+            )
+            frame_pose = self.app.form_common.fixture_pose()
+            settings = self.app.form_common.robot_export_settings()
+            export_ring_arc_program(
+                frame_pose=frame_pose,
+                inner_radius_mm=params.inner_radius_mm,
+                ring_width_mm=params.ring_width_mm,
+                beam_width_mm=params.beam_width_mm,
+                start_point_mm=start_point,
+                finish_point_mm=finish_point,
+                filepath=Path(filepath),
+                settings=settings,
+                generator_id=self.generator_id,
+            )
+            self.app.form_common.save_fixture_pose_to_project()
+            self.save_params_to_project()
+            self.app.save_project()
+        except Exception as error:
+            messagebox.showerror("Создать УП дугами", str(error))
+            return
+
+        summary = arc_pass_summary_text(plan, params.beam_width_mm)
+        messagebox.showinfo(
+            "Создать УП дугами",
+            f"Файл сохранён:\n{filepath}\n\n{summary}",
+        )

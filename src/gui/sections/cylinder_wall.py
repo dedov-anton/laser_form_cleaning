@@ -6,7 +6,9 @@ from tkinter import filedialog, messagebox, ttk
 from typing import TYPE_CHECKING, Callable
 
 from src.exporters.robot.export import export_robot_program
+from src.exporters.robot.elite_program import build_elite_program
 from src.exporters.step.export import export_trajectory
+from src.exporters.step.from_elite_program import export_step_from_elite_program
 from src.generators.cylinder_wall.calc import (
     overlap_per_sector,
     overlap_percent,
@@ -29,7 +31,10 @@ from src.gui.parsing import (
 )
 from src.gui.widgets.wall_profile_canvas import WallProfileCanvas
 from src.storage.project_store import store_local_trajectory, store_trajectory
-from src.transforms.trajectory_transform import transform_work_trajectory
+from src.transforms.trajectory_transform import (
+    apply_program_start_finish,
+    transform_work_trajectory,
+)
 from src.transforms.wrist_correction_export import (
     format_wrist_correction_summary,
     run_cylinder_wrist_correction,
@@ -176,7 +181,11 @@ class CylinderWallSection:
         self.profile_canvas.pack()
         self.profile_canvas.bind("<Configure>", lambda _e: self._update_profile_preview())
 
-        points_frame = ttk.LabelFrame(frame, text="Старт / финиш (мм)", padding=8)
+        points_frame = ttk.LabelFrame(
+            frame,
+            text="Старт / финиш (мм) — координаты УП, без переноса по 6D позе",
+            padding=8,
+        )
         points_frame.pack(fill=tk.X, pady=(0, 8))
         start_row = ttk.Frame(points_frame)
         start_row.pack(fill=tk.X, pady=2)
@@ -593,7 +602,12 @@ class CylinderWallSection:
             return
 
         try:
-            export_trajectory(trajectory, filepath)
+            if trajectory.metadata.get("wrist_correction_applied"):
+                settings = self.app.form_common.robot_export_settings()
+                program = build_elite_program(trajectory, settings)
+                export_step_from_elite_program(program, filepath)
+            else:
+                export_trajectory(trajectory, filepath)
         except Exception as error:
             messagebox.showerror("Экспорт STEP", str(error))
             return
@@ -615,6 +629,8 @@ class CylinderWallSection:
             return
 
         try:
+            start_point, finish_point = self._read_trajectory_points()
+            trajectory = apply_program_start_finish(trajectory, start_point, finish_point)
             settings = self.app.form_common.robot_export_settings()
             export_robot_program(trajectory, Path(filepath), settings)
         except Exception as error:

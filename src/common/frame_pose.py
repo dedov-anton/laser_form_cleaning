@@ -30,6 +30,17 @@ class FramePose6D:
     def to_dict(self) -> dict[str, float]:
         return asdict(self)
 
+    @classmethod
+    def from_dict(cls, data: dict) -> FramePose6D:
+        return cls(
+            x_mm=float(data.get("x_mm", 0.0)),
+            y_mm=float(data.get("y_mm", 0.0)),
+            z_mm=float(data.get("z_mm", 0.0)),
+            rx_deg=float(data.get("rx_deg", 0.0)),
+            ry_deg=float(data.get("ry_deg", 0.0)),
+            rz_deg=float(data.get("rz_deg", 0.0)),
+        )
+
 
 def _rotation_x(angle_rad: float) -> Matrix3:
     cos_a = math.cos(angle_rad)

@@ -106,15 +106,52 @@ def is_wrist_correction_work_pose(pose_type: str) -> bool:
     return pose_type not in ("start", "finish")
 
 
-def offset_position_for_lcorr(
+def lcorr_perpendicular_up(beam: Point3) -> Point3:
+    """
+    Unit direction for the second Lcorr segment: perpendicular to the tilted beam
+    in the plane spanned by the beam and world +Z.
+    """
+    beam_unit = _normalize(beam)
+    z_ref = VERTICAL_UPWARD
+    projected = (
+        z_ref[0] - _dot(z_ref, beam_unit) * beam_unit[0],
+        z_ref[1] - _dot(z_ref, beam_unit) * beam_unit[1],
+        z_ref[2] - _dot(z_ref, beam_unit) * beam_unit[2],
+    )
+    length = math.hypot(projected[0], projected[1], projected[2])
+    if length < 1e-9:
+        if abs(beam_unit[2]) > 0.999:
+            projected = (1.0, 0.0, 0.0)
+        else:
+            projected = _cross(beam_unit, z_ref)
+        length = math.hypot(projected[0], projected[1], projected[2])
+        if length < 1e-9:
+            raise ValueError("Cannot build perpendicular up direction for Lcorr")
+    return (projected[0] / length, projected[1] / length, projected[2] / length)
+
+
+def tcp_position_after_lcorr(
     position: Point3,
-    inward: Point3,
+    tool_axis_z: Point3,
     lcorr_mm: float,
 ) -> Point3:
+    """
+    TCP after wrist offset: Lcorr along tilted beam toward axis, then Lcorr along
+    perpendicular up in the beam–Z plane.
+    """
+    if lcorr_mm <= 0.0:
+        return position
+    beam = _normalize(tool_axis_z)
+    along_beam = (
+        position[0] - lcorr_mm * beam[0],
+        position[1] - lcorr_mm * beam[1],
+        position[2] - lcorr_mm * beam[2],
+    )
+    up = lcorr_perpendicular_up(beam)
     return (
-        position[0] + lcorr_mm * inward[0],
-        position[1] + lcorr_mm * inward[1],
-        position[2] + lcorr_mm,
+        along_beam[0] + lcorr_mm * up[0],
+        along_beam[1] + lcorr_mm * up[1],
+        along_beam[2] + lcorr_mm * up[2],
     )
 
 
@@ -144,7 +181,7 @@ def apply_wrist_correction_to_pose(
     new_tool_axis_x = orthogonal_tool_axis_x(rotated_x, new_tool_axis_z)
     new_position = pose.position
     if lcorr_mm > 0.0 and is_wrist_correction_work_pose(pose.pose_type):
-        new_position = offset_position_for_lcorr(pose.position, inward, lcorr_mm)
+        new_position = tcp_position_after_lcorr(pose.position, pose.tool_axis_z, lcorr_mm)
     return replace(
         pose,
         position=new_position,

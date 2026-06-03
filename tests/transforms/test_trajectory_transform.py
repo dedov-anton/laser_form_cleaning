@@ -47,13 +47,38 @@ class TrajectoryTransformTests(unittest.TestCase):
         self.assertAlmostEqual(world.poses[1].position[0], local.poses[1].position[0], places=4)
         self.assertAlmostEqual(world.poses[1].tool_axis_z[2], local.poses[1].tool_axis_z[2], places=4)
 
-    def test_translation_updates_start_finish(self) -> None:
+    def test_translation_preserves_start_finish(self) -> None:
         local = _minimal_trajectory()
+        local = WorkTrajectory(
+            generator_id=local.generator_id,
+            generator_version=local.generator_version,
+            params_snapshot=local.params_snapshot,
+            start_point_mm=(600.0, 500.0, 400.0),
+            finish_point_mm=(600.0, 500.0, 400.0),
+            poses=local.poses,
+            travel_segments=local.travel_segments,
+            work_segments=local.work_segments,
+            reference_geometry=local.reference_geometry,
+            metadata=local.metadata,
+        )
         pose = FramePose6D(x_mm=10.0, y_mm=20.0, z_mm=30.0)
         world = transform_work_trajectory(local, pose)
-        self.assertAlmostEqual(world.start_point_mm[0], local.start_point_mm[0] + 10.0)
-        self.assertAlmostEqual(world.finish_point_mm[1], local.finish_point_mm[1] + 20.0)
+        self.assertEqual(world.start_point_mm, local.start_point_mm)
+        self.assertEqual(world.finish_point_mm, local.finish_point_mm)
         self.assertEqual(world.metadata.get("coordinate_frame"), "world")
+
+    def test_travel_approach_departure_endpoints(self) -> None:
+        local = _minimal_trajectory()
+        pose = FramePose6D(x_mm=100.0, y_mm=0.0, z_mm=0.0)
+        world = transform_work_trajectory(local, pose)
+        approach = next(s for s in world.travel_segments if s.segment_type == "approach")
+        departure = next(s for s in world.travel_segments if s.segment_type == "departure")
+        local_approach = next(s for s in local.travel_segments if s.segment_type == "approach")
+        local_departure = next(s for s in local.travel_segments if s.segment_type == "departure")
+        self.assertEqual(approach.start, local_approach.start)
+        self.assertNotEqual(approach.finish, local_approach.finish)
+        self.assertNotEqual(departure.start, local_departure.start)
+        self.assertEqual(departure.finish, local_departure.finish)
 
     def test_reapply_from_local_not_cumulative(self) -> None:
         local = WorkTrajectory(

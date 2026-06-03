@@ -20,12 +20,14 @@ from src.storage.project_store import (
 from src.storage.trajectory_codec import trajectory_from_dict, trajectory_to_dict
 from src.transforms.wrist_correction import (
     VERTICAL_UPWARD,
+    _dot,
     apply_wrist_correction,
     apply_wrist_correction_to_pose,
     cylinder_axis_xy,
     expected_wrist_corrected_tool_axis_z,
     inward_direction_to_axis,
-    offset_position_for_lcorr,
+    lcorr_perpendicular_up,
+    tcp_position_after_lcorr,
     verify_radial_to_vertical_correction,
 )
 from src.transforms.wrist_correction_export import run_cylinder_wrist_correction
@@ -178,16 +180,64 @@ class WristCorrectionTests(unittest.TestCase):
         )
         axis_xy = (600.0, 200.0)
         lcorr_mm = 50.0
-        inward = inward_direction_to_axis(pose.position, axis_xy)
-        self.assertIsNotNone(inward)
-        expected = offset_position_for_lcorr(pose.position, inward, lcorr_mm)
+        expected = tcp_position_after_lcorr(pose.position, pose.tool_axis_z, lcorr_mm)
         corrected = apply_wrist_correction_to_pose(pose, axis_xy=axis_xy, lcorr_mm=lcorr_mm)
         for index in range(3):
             self.assertAlmostEqual(corrected.position[index], expected[index], places=3)
         self.assertAlmostEqual(corrected.position[2], pose.position[2] + lcorr_mm, places=3)
-        dist_before = math.hypot(pose.position[0] - axis_xy[0], pose.position[1] - axis_xy[1])
-        dist_after = math.hypot(corrected.position[0] - axis_xy[0], corrected.position[1] - axis_xy[1])
-        self.assertAlmostEqual(dist_before - dist_after, lcorr_mm, places=2)
+        beam = (
+            pose.tool_axis_z[0],
+            pose.tool_axis_z[1],
+            pose.tool_axis_z[2],
+        )
+        beam_len = math.hypot(*beam)
+        beam = (beam[0] / beam_len, beam[1] / beam_len, beam[2] / beam_len)
+        up = lcorr_perpendicular_up(beam)
+        self.assertAlmostEqual(_dot(beam, up), 0.0, places=6)
+        self.assertAlmostEqual(up[2], 1.0, places=6)
+
+    def test_lcorr_tilt_top_bottom_different_xy(self) -> None:
+        params = CylinderWallParams(
+            inner_radius_mm=300.0,
+            wall_height_mm=200.0,
+            z_top_mm=500.0,
+            beam_width_mm=100.0,
+            passes_per_sector=1,
+            start_sector=0,
+            clockwise=True,
+            top_tilt_deg=15.0,
+            bottom_tilt_deg=-15.0,
+        )
+        trajectory = cylinder_to_work(build_cylinder(params), params)
+        corrected = apply_wrist_correction(trajectory, lcorr_mm=50.0)
+        top = next(pose for pose in corrected.poses if pose.pose_type == "top")
+        bottom = next(pose for pose in corrected.poses if pose.pose_type == "bottom")
+        self.assertNotAlmostEqual(top.position[0], bottom.position[0], places=1)
+        self.assertNotAlmostEqual(top.position[1], bottom.position[1], places=1)
+
+    def test_lcorr_perpendicular_up_orthogonal_to_tilted_beam(self) -> None:
+        params = CylinderWallParams(
+            inner_radius_mm=300.0,
+            wall_height_mm=200.0,
+            z_top_mm=500.0,
+            beam_width_mm=100.0,
+            passes_per_sector=1,
+            start_sector=0,
+            clockwise=True,
+            top_tilt_deg=15.0,
+            bottom_tilt_deg=-15.0,
+        )
+        trajectory = cylinder_to_work(build_cylinder(params), params)
+        for pose in trajectory.poses:
+            if pose.pose_type not in ("top", "bottom", "work_profile_1", "work_profile_2"):
+                continue
+            if pose.pose_type.startswith("work_profile_"):
+                continue
+            length = math.hypot(*pose.tool_axis_z)
+            beam = tuple(component / length for component in pose.tool_axis_z)
+            up = lcorr_perpendicular_up(beam)
+            self.assertAlmostEqual(_dot(beam, up), 0.0, places=6)
+            self.assertAlmostEqual(math.hypot(*up), 1.0, places=6)
 
     def test_lcorr_zero_preserves_position(self) -> None:
         pose = Pose6D(

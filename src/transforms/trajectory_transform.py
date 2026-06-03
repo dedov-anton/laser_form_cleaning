@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import copy
 import math
 from typing import Any, List
+
+import copy
 
 from src.common.frame_pose import FramePose6D, rotation_matrix_sxyz, transform_point, transform_vector
 from src.common.geometry import Point3, Pose6D, TravelSegment
@@ -54,27 +55,113 @@ def _transform_reference_geometry(
     return result
 
 
+def apply_program_start_finish(
+    trajectory: WorkTrajectory,
+    start_point_mm: Point3,
+    finish_point_mm: Point3,
+) -> WorkTrajectory:
+    """Override start/finish with GUI values without changing work poses."""
+    result = copy.deepcopy(trajectory)
+    result.start_point_mm = start_point_mm
+    result.finish_point_mm = finish_point_mm
+    result.poses = [
+        Pose6D(
+            index=pose.index,
+            pose_type=pose.pose_type,
+            position=start_point_mm if pose.pose_type == "start" else finish_point_mm
+            if pose.pose_type == "finish"
+            else pose.position,
+            tool_axis_z=pose.tool_axis_z,
+            tool_axis_x=pose.tool_axis_x,
+        )
+        for pose in result.poses
+    ]
+    if result.travel_segments:
+        segments = list(result.travel_segments)
+        approach = next((s for s in segments if s.segment_type == "approach"), None)
+        departure = next((s for s in segments if s.segment_type == "departure"), None)
+        updated: list[TravelSegment] = []
+        for segment in segments:
+            if segment is approach:
+                updated.append(
+                    TravelSegment(
+                        index=segment.index,
+                        segment_type=segment.segment_type,
+                        start=start_point_mm,
+                        finish=segment.finish,
+                    )
+                )
+            elif segment is departure:
+                updated.append(
+                    TravelSegment(
+                        index=segment.index,
+                        segment_type=segment.segment_type,
+                        start=segment.start,
+                        finish=finish_point_mm,
+                    )
+                )
+            else:
+                updated.append(segment)
+        result.travel_segments = updated
+    return result
+
+
+def _is_fixed_program_point(pose_type: str) -> bool:
+    return pose_type in ("start", "finish")
+
+
+def _transform_travel_endpoint(
+    point: Point3,
+    segment_type: str,
+    *,
+    is_start: bool,
+    rotation,
+    translation: Point3,
+) -> Point3:
+    if segment_type == "approach" and is_start:
+        return point
+    if segment_type == "departure" and not is_start:
+        return point
+    return transform_point(point, rotation, translation)
+
+
 def transform_work_trajectory(trajectory: WorkTrajectory, pose: FramePose6D) -> WorkTrajectory:
     rotation = rotation_matrix_sxyz(pose.rx_deg, pose.ry_deg, pose.rz_deg)
     translation = pose.translation()
 
-    poses = [
-        Pose6D(
-            index=pose_item.index,
-            pose_type=pose_item.pose_type,
-            position=transform_point(pose_item.position, rotation, translation),
-            tool_axis_z=transform_vector(pose_item.tool_axis_z, rotation),
-            tool_axis_x=transform_vector(pose_item.tool_axis_x, rotation),
+    poses = []
+    for pose_item in trajectory.poses:
+        if _is_fixed_program_point(pose_item.pose_type):
+            poses.append(pose_item)
+            continue
+        poses.append(
+            Pose6D(
+                index=pose_item.index,
+                pose_type=pose_item.pose_type,
+                position=transform_point(pose_item.position, rotation, translation),
+                tool_axis_z=transform_vector(pose_item.tool_axis_z, rotation),
+                tool_axis_x=transform_vector(pose_item.tool_axis_x, rotation),
+            )
         )
-        for pose_item in trajectory.poses
-    ]
 
     travel_segments = [
         TravelSegment(
             index=segment.index,
             segment_type=segment.segment_type,
-            start=transform_point(segment.start, rotation, translation),
-            finish=transform_point(segment.finish, rotation, translation),
+            start=_transform_travel_endpoint(
+                segment.start,
+                segment.segment_type,
+                is_start=True,
+                rotation=rotation,
+                translation=translation,
+            ),
+            finish=_transform_travel_endpoint(
+                segment.finish,
+                segment.segment_type,
+                is_start=False,
+                rotation=rotation,
+                translation=translation,
+            ),
         )
         for segment in trajectory.travel_segments
     ]
@@ -97,8 +184,8 @@ def transform_work_trajectory(trajectory: WorkTrajectory, pose: FramePose6D) -> 
         generator_id=trajectory.generator_id,
         generator_version=trajectory.generator_version,
         params_snapshot=copy.deepcopy(trajectory.params_snapshot),
-        start_point_mm=transform_point(trajectory.start_point_mm, rotation, translation),
-        finish_point_mm=transform_point(trajectory.finish_point_mm, rotation, translation),
+        start_point_mm=trajectory.start_point_mm,
+        finish_point_mm=trajectory.finish_point_mm,
         poses=poses,
         travel_segments=travel_segments,
         work_segments=work_segments,

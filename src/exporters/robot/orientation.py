@@ -37,6 +37,32 @@ def _project_on_plane(vector: Point3, plane_normal: Point3) -> Point3:
     )
 
 
+def rpy_to_rotation_rows(roll: float, pitch: float, yaw: float) -> Tuple[Point3, Point3, Point3]:
+    """
+    Tool basis rows (tcp_x, tcp_y, tcp_z) in world frame — inverse of rotation_matrix_to_rpy.
+    Matches rows built in calculate_orientation before RPY extraction.
+    """
+    cr = math.cos(roll)
+    sr = math.sin(roll)
+    cp = math.cos(pitch)
+    sp = math.sin(pitch)
+    cy = math.cos(yaw)
+    sy = math.sin(yaw)
+
+    ex = (cy * cp, sy * cp, -sp)
+    ey = (
+        cy * sp * sr - sy * cr,
+        sy * sp * sr + cy * cr,
+        cp * sr,
+    )
+    ez = (
+        cy * sp * cr + sy * sr,
+        sy * sp * cr - cy * sr,
+        cp * cr,
+    )
+    return (_normalize(ex), _normalize(ey), _normalize(ez))
+
+
 def rotation_matrix_to_rpy(rotation: Tuple[Tuple[float, float, float], ...]) -> RollPitchYaw:
     """Extract roll, pitch, yaw (radians); rotation rows are basis columns like bk column_stack."""
     x_vec, y_vec, z_vec = rotation[0], rotation[1], rotation[2]

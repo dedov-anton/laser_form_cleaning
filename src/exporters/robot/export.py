@@ -2,8 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from src.common.frame_pose import FramePose6D
+from src.common.geometry import Point3
 from src.common.trajectory import WorkTrajectory
-from src.exporters.robot.elite_program import RobotExportError, build_elite_program
+from src.exporters.robot.elite_program import (
+    RobotExportError,
+    build_elite_program,
+    build_ring_arc_program,
+)
+from src.exporters.robot.ring_arc import build_ring_arc_geometry, plan_arc_passes
 from src.exporters.robot.settings import RobotExportSettings
 
 
@@ -26,6 +33,41 @@ def export_robot_program(
         )
 
     program = build_elite_program(trajectory, settings)
+    filepath = Path(filepath)
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    filepath.write_text(program, encoding="utf-8")
+
+
+def export_ring_arc_program(
+    *,
+    frame_pose: FramePose6D,
+    inner_radius_mm: float,
+    ring_width_mm: float,
+    beam_width_mm: float,
+    start_point_mm: Point3,
+    finish_point_mm: Point3,
+    filepath: Path,
+    settings: RobotExportSettings | None = None,
+    generator_id: str = "bottom_ring",
+) -> None:
+    if settings is None:
+        settings = RobotExportSettings()
+
+    geometry = build_ring_arc_geometry(
+        frame_pose,
+        inner_radius_mm,
+        ring_width_mm,
+        beam_width_mm,
+        generator_id=generator_id,
+    )
+    plan = plan_arc_passes(inner_radius_mm, ring_width_mm, beam_width_mm)
+    program = build_ring_arc_program(
+        settings,
+        geometry=geometry,
+        pass_plan=plan,
+        start_point_mm=start_point_mm,
+        finish_point_mm=finish_point_mm,
+    )
     filepath = Path(filepath)
     filepath.parent.mkdir(parents=True, exist_ok=True)
     filepath.write_text(program, encoding="utf-8")

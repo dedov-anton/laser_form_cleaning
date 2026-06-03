@@ -37,7 +37,28 @@ def _work_pass_color(pass_index: int, pass_count: int):
     return WORK_COLOR
 
 
+def _is_wrist_corrected_trajectory(trajectory: WorkTrajectory) -> bool:
+    return bool(trajectory.metadata.get("wrist_correction_applied"))
+
+
+def _add_default_pose_tool_vis(writer: StepWriter, pose) -> None:
+    tool_base, tool_tip = approach_line(
+        pose.position, pose.tool_axis_z, TOOL_AXIS_VIS_LENGTH_MM
+    )
+    writer.add_line(tool_base, tool_tip, TOOL_VIS_COLOR, "tool_axis")
+    radial_end = axis_endpoint(
+        pose.position, pose.tool_axis_x, TOOL_RADIAL_VIS_LENGTH_MM
+    )
+    writer.add_line(pose.position, radial_end, TOOL_VIS_COLOR, "tool_axis")
+
+
 def _fill_writer(writer, trajectory: WorkTrajectory) -> None:
+    if _is_wrist_corrected_trajectory(trajectory):
+        raise ValueError(
+            "STEP для траектории с wrist_correction_applied строится только из текста УП "
+            "(export_step_from_elite_program). Сначала создайте УП или нажмите «Коррекция запястья»."
+        )
+
     for travel_segment in trajectory.travel_segments:
         writer.add_line(travel_segment.start, travel_segment.finish, TRAVEL_COLOR, "travel")
 
@@ -71,14 +92,7 @@ def _fill_writer(writer, trajectory: WorkTrajectory) -> None:
     writer.add_point_marker(trajectory.finish_point_mm, FINISH_POINT_COLOR, "finish_point")
 
     for pose in trajectory.poses:
-        tool_base, tool_tip = approach_line(
-            pose.position, pose.tool_axis_z, TOOL_AXIS_VIS_LENGTH_MM
-        )
-        writer.add_line(tool_base, tool_tip, TOOL_VIS_COLOR, "tool_axis")
-        radial_end = axis_endpoint(
-            pose.position, pose.tool_axis_x, TOOL_RADIAL_VIS_LENGTH_MM
-        )
-        writer.add_line(pose.position, radial_end, TOOL_VIS_COLOR, "tool_axis")
+        _add_default_pose_tool_vis(writer, pose)
 
 
 def export_trajectory(trajectory: WorkTrajectory, filepath: Path | str) -> None:

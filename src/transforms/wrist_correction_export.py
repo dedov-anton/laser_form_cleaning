@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.common.trajectory import WorkTrajectory
-from src.exporters.robot.export import export_robot_program
 from src.exporters.robot.settings import RobotExportSettings
-from src.exporters.step.export import export_trajectory
+from src.exporters.robot.elite_program import build_elite_program
+from src.exporters.step.from_elite_program import export_step_from_elite_program
 from src.storage.project_store import load_project, load_trajectory_file, save_trajectory_file
 from src.transforms.wrist_correction import (
     VERTICAL_UPWARD,
@@ -73,9 +73,6 @@ def run_cylinder_wrist_correction(
 
     save_trajectory_file(json_path, corrected)
 
-    step_path.parent.mkdir(parents=True, exist_ok=True)
-    export_trajectory(corrected, step_path)
-
     if robot_settings is None:
         project = load_project(project_root)
         robot_settings = RobotExportSettings(
@@ -85,8 +82,12 @@ def run_cylinder_wrist_correction(
             tool_mount_rotation_deg=project.tool_mount_rotation_deg,
         )
 
+    program = build_elite_program(corrected, robot_settings)
     up_path.parent.mkdir(parents=True, exist_ok=True)
-    export_robot_program(corrected, up_path, robot_settings)
+    up_path.write_text(program, encoding="utf-8")
+
+    step_path.parent.mkdir(parents=True, exist_ok=True)
+    export_step_from_elite_program(program, step_path)
 
     return WristCorrectionOutputs(
         json_path=json_path,
