@@ -1,0 +1,4 @@
+# laser_form_cleaning — внешних pip-пакетов не требуется.
+#
+# Python 3.10+ с tkinter (на Windows обычно в установке с python.org).
+# STEP: StepWriter (ISO-10303-21), только stdlib.

@@ -26,7 +26,7 @@ GUI (единое окно)
 | Общие типы | `src/common/` | `Pose6D`, `WorkTrajectory`, `FormProject` |
 | Генераторы | `src/generators/` | Расчёт траекторий по поверхностям |
 | Хранение | `src/storage/` | `project.json`, сериализация траекторий |
-| Экспорт | `src/exporters/` | STEP (XCAF), УП робота (заглушка) |
+| Экспорт | `src/exporters/` | STEP (`StepWriter`, ISO-10303-21), УП робота Elite |
 | Трансформации | `src/transforms/` | Перенос `WorkTrajectory` по 6D-позе (Elite sxyz) |
 | GUI | `src/gui/` | Shell + секции по поверхностям |
 
@@ -47,6 +47,14 @@ GUI (единое окно)
 ### WorkTrajectory
 
 Универсальный «сырой» результат генератора: последовательность поз инструмента (`poses`), перемещения (`travel_segments`), рабочие сегменты (`work_segments`), справочная геометрия для визуализации. Экспортёры работают только с этим форматом.
+
+## Зависимости
+
+**pip-пакеты не нужны** — см. [`requirements.txt`](requirements.txt).
+
+- Python 3.10+ с **tkinter** (GUI).
+- Экспорт **STEP** — [`StepWriter`](src/exporters/step/writer.py), запись STEP-AP214 текстом (stdlib). Open CASCADE (OCP) не используется.
+- Legacy-скрипты `welding_path_generator_*.py` могут требовать `numpy` — к основному приложению (`main.py`) не относятся.
 
 ## Тесты
 

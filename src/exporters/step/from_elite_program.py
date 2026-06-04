@@ -9,13 +9,6 @@ from src.common.geometry import TOOL_AXIS_VIS_LENGTH_MM, Point3, approach_line
 from src.exporters.robot.orientation import RollPitchYaw, rpy_to_rotation_rows
 from src.exporters.step.writer import TCP_POINT_COLOR, TOOL_VIS_COLOR, StepWriter
 
-try:
-    from src.exporters.step.xcaf_writer import XcafStepWriter
-
-    _XCAF_AVAILABLE = True
-except ImportError:
-    _XCAF_AVAILABLE = False
-
 _POSE_LINE_PATTERN = re.compile(
     r"pose_(?P<name>work_\d+)\s*=\s*\["
     r"(?P<x>[-\d.]+),\s*(?P<y>[-\d.]+),\s*(?P<z>[-\d.]+),\s*"
@@ -85,6 +78,6 @@ def _fill_writer_from_elite_work_poses(
 def export_step_from_elite_program(program: str, filepath: Path | str) -> None:
     """STEP from Elite UP: TCP markers + one TCP +Z arrow per pose_work_N (no path links)."""
     work_poses = parse_elite_program_work_poses(program)
-    writer = XcafStepWriter() if _XCAF_AVAILABLE else StepWriter()
+    writer = StepWriter()
     _fill_writer_from_elite_work_poses(writer, work_poses)
     writer.write(Path(filepath))

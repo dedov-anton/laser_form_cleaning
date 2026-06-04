@@ -21,13 +21,6 @@ from src.exporters.step.writer import (
     StepWriter,
 )
 
-try:
-    from src.exporters.step.xcaf_writer import XcafStepWriter
-
-    _XCAF_AVAILABLE = True
-except ImportError:
-    _XCAF_AVAILABLE = False
-
 
 def _work_pass_color(pass_index: int, pass_count: int):
     if pass_index == 0:
@@ -97,7 +90,7 @@ def _fill_writer(writer, trajectory: WorkTrajectory) -> None:
 
 def export_trajectory(trajectory: WorkTrajectory, filepath: Path | str) -> None:
     path = Path(filepath)
-    writer = XcafStepWriter() if _XCAF_AVAILABLE else StepWriter()
+    writer = StepWriter()
     _fill_writer(writer, trajectory)
     writer.write(path)
 

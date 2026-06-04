@@ -4,6 +4,32 @@
 
 ---
 
+## 2026-06-02 — Зависимости: Open CASCADE (OCP) не нужен
+
+### Задача
+
+Проверить пустой [`requirements.txt`](requirements.txt): нужны ли pip-пакеты, в т.ч. для экспорта STEP.
+
+### Что выяснили
+
+| Вопрос | Ответ |
+|--------|--------|
+| Используется ли OCP сейчас? | **Нет**, если не установлен `cadquery-ocp` (типичная среда проекта) |
+| Как пишется STEP? | [`StepWriter`](src/exporters/step/writer.py) — ISO-10303-21, stdlib |
+| Зачем был `xcaf_writer.py`? | Запасной XCAF/OCP-путь; на практике не использовался |
+
+### Решение
+
+- Удалён [`xcaf_writer.py`](src/exporters/step/xcaf_writer.py) и ветки `_XCAF_AVAILABLE` в [`export.py`](src/exporters/step/export.py), [`from_elite_program.py`](src/exporters/step/from_elite_program.py).
+- STEP только через [`StepWriter`](src/exporters/step/writer.py).
+- [`requirements.txt`](requirements.txt), [`README.md`](README.md) — pip/OCP не нужны.
+
+### Результат
+
+Проект экспортирует STEP **без** Open CASCADE; зависимостей pip нет.
+
+---
+
 ## 2026-06-02 — Верхнее кольцо (УП дугами), старт/финиш дуг, цвета GUI
 
 ### Задачи

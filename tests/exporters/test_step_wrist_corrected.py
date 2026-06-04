@@ -2,7 +2,6 @@ import math
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from src.common.geometry import TOOL_AXIS_VIS_LENGTH_MM, approach_line
 from src.exporters.robot.elite_program import build_elite_program
@@ -129,10 +128,6 @@ class TestStepFromEliteProgram(unittest.TestCase):
         program = UP_FIXTURE.read_text(encoding="utf-8")
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "from_up.step"
-            with patch(
-                "src.exporters.step.from_elite_program._XCAF_AVAILABLE",
-                False,
-            ):
-                export_step_from_elite_program(program, path)
+            export_step_from_elite_program(program, path)
             self.assertTrue(path.exists())
             self.assertGreater(path.stat().st_size, 0)
