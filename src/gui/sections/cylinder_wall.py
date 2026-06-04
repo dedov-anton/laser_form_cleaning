@@ -29,6 +29,7 @@ from src.gui.parsing import (
     parse_positive_int,
     parse_tilt_deg,
 )
+from src.gui.section_styles import SectionUI
 from src.gui.widgets.wall_profile_canvas import WallProfileCanvas
 from src.storage.project_store import store_local_trajectory, store_trajectory
 from src.transforms.trajectory_transform import (
@@ -83,72 +84,74 @@ class CylinderWallSection:
         self.finish_z_var = tk.StringVar(value="0")
         self.lcorr_var = tk.StringVar(value="0")
         self.status_var = tk.StringVar(value="Траектория: не создана")
+        self.ui = SectionUI("cylinder_wall")
         self._build(parent)
 
     def _build(self, parent: ttk.Frame) -> None:
-        frame = ttk.LabelFrame(parent, text="Поверхность качения (цилиндр)", padding=8)
+        ui = self.ui
+        frame = ui.lf(parent, "Поверхность качения (цилиндр)")
         frame.pack(fill=tk.X, pady=(0, 8))
 
-        top_row = ttk.Frame(frame)
+        top_row = ui.fr(frame)
         top_row.pack(fill=tk.X, pady=(0, 8))
         top_row.columnconfigure(0, weight=1)
         top_row.columnconfigure(1, weight=1)
 
-        cylinder_frame = ttk.LabelFrame(top_row, text="Параметры цилиндра", padding=8)
+        cylinder_frame = ui.lf(top_row, "Параметры цилиндра")
         cylinder_frame.grid(row=0, column=0, sticky=tk.NSEW, padx=(0, 4))
         self._add_labeled_entry(cylinder_frame, 0, "Внутренний радиус (мм):", self.inner_radius_var)
         self._add_labeled_entry(cylinder_frame, 1, "Высота стенки (мм):", self.wall_height_var)
         self._add_labeled_entry(cylinder_frame, 2, "Z до верхней точки (мм):", self.z_top_var)
 
-        clean_frame = ttk.LabelFrame(top_row, text="Параметры чистки", padding=8)
+        clean_frame = ui.lf(top_row, "Параметры чистки")
         clean_frame.grid(row=0, column=1, sticky=tk.NSEW, padx=(4, 0))
-        passes_row = ttk.Frame(clean_frame)
+        passes_row = ui.fr(clean_frame)
         passes_row.grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=4)
-        ttk.Label(passes_row, text="Проходов в секторе:").pack(side=tk.LEFT)
-        ttk.Entry(passes_row, textvariable=self.passes_per_sector_var, width=10).pack(
+        ui.lb(passes_row, text="Проходов в секторе:").pack(side=tk.LEFT)
+        ui.en(passes_row, textvariable=self.passes_per_sector_var, width=10).pack(
             side=tk.LEFT, padx=(8, 4)
         )
-        ttk.Button(passes_row, text="↻ авто", command=self._apply_recommended_passes).pack(side=tk.LEFT)
-        self.overlap_label = ttk.Label(clean_frame, textvariable=self.overlap_var)
+        ui.bn(passes_row, text="↻ авто", command=self._apply_recommended_passes).pack(side=tk.LEFT)
+        self.overlap_label = ui.lb(clean_frame, textvariable=self.overlap_var)
         self.overlap_label.grid(row=1, column=0, columnspan=2, sticky=tk.W, pady=2)
-        ttk.Label(
+        ui.lb(
             clean_frame,
             text=f"Секторов: {SECTOR_COUNT} (по 45°), обработка изнутри, сверху вниз",
             wraplength=360,
         ).grid(row=2, column=0, columnspan=2, sticky=tk.W, pady=(4, 0))
 
-        sector_frame = ttk.LabelFrame(frame, text="Стартовый сектор", padding=8)
+        sector_frame = ui.lf(frame, "Стартовый сектор")
         sector_frame.pack(fill=tk.X, pady=(0, 8))
-        sector_row = ttk.Frame(sector_frame)
+        sector_row = ui.fr(sector_frame)
         sector_row.pack(fill=tk.X)
-        ttk.Label(sector_row, text="Сектор:").pack(side=tk.LEFT)
-        ttk.Combobox(
+        ui.lb(sector_row, text="Сектор:").pack(side=tk.LEFT)
+        ui.cmb(
             sector_row,
             textvariable=self.start_sector_var,
             values=SECTOR_LABELS,
             state="readonly",
             width=16,
         ).pack(side=tk.LEFT, padx=(8, 16))
-        ttk.Checkbutton(
+        ui.cb(
             sector_row,
             text="По часовой стрелке",
             variable=self.clockwise_var,
         ).pack(side=tk.LEFT)
 
-        profile_frame = ttk.LabelFrame(frame, text="Профиль / наклон", padding=8)
+        profile_frame = ui.lf(frame, "Профиль / наклон")
         profile_frame.pack(fill=tk.X, pady=(0, 8))
         profile_frame.columnconfigure(0, weight=1)
         profile_frame.columnconfigure(1, weight=0)
 
-        fields = ttk.Frame(profile_frame)
+        fields = ui.fr(profile_frame)
         fields.grid(row=0, column=0, sticky=tk.NSEW, padx=(0, 8))
 
-        edges = ttk.Frame(fields)
+        edges = ui.fr(fields)
         edges.pack(fill=tk.X, pady=(0, 6))
         self._add_inline_field(edges, "Верх. наклон (°):", self.top_tilt_var, 0)
         self._add_inline_field(edges, "Низ. наклон (°):", self.bottom_tilt_var, 2)
 
-        mid_row = ttk.Frame(fields)
+        mid_row = ui.fr(fields)
         mid_row.pack(fill=tk.X)
         mid_row.columnconfigure(0, weight=1)
         mid_row.columnconfigure(1, weight=1)
@@ -168,66 +171,65 @@ class CylinderWallSection:
             self.profile2_radial_var,
             self.profile2_tilt_var,
         )
-        ttk.Label(
+        ui.lb(
             fields,
             text="+ — к оси, − — наружу от стенки. Вниз=0 — точка выкл.",
             wraplength=420,
         ).pack(anchor=tk.W, pady=(6, 0))
 
-        preview_frame = ttk.Frame(profile_frame)
+        preview_frame = ui.fr(profile_frame)
         preview_frame.grid(row=0, column=1, sticky=tk.N)
-        ttk.Label(preview_frame, text="Сечение стенки").pack(anchor=tk.W)
+        ui.lb(preview_frame, text="Сечение стенки").pack(anchor=tk.W)
         self.profile_canvas = WallProfileCanvas(preview_frame)
         self.profile_canvas.pack()
         self.profile_canvas.bind("<Configure>", lambda _e: self._update_profile_preview())
 
-        points_frame = ttk.LabelFrame(
+        points_frame = ui.lf(
             frame,
-            text="Старт / финиш (мм) — координаты УП, без переноса по 6D позе",
-            padding=8,
+            "Старт / финиш (мм) — координаты УП, без переноса по 6D позе",
         )
         points_frame.pack(fill=tk.X, pady=(0, 8))
-        start_row = ttk.Frame(points_frame)
+        start_row = ui.fr(points_frame)
         start_row.pack(fill=tk.X, pady=2)
         self._add_inline_field(start_row, "Старт X:", self.start_x_var, 0, width=8)
         self._add_inline_field(start_row, "Y:", self.start_y_var, 2, width=8)
         self._add_inline_field(start_row, "Z:", self.start_z_var, 4, width=8)
-        finish_row = ttk.Frame(points_frame)
+        finish_row = ui.fr(points_frame)
         finish_row.pack(fill=tk.X, pady=2)
         self._add_inline_field(finish_row, "Финиш X:", self.finish_x_var, 0, width=8)
         self._add_inline_field(finish_row, "Y:", self.finish_y_var, 2, width=8)
         self._add_inline_field(finish_row, "Z:", self.finish_z_var, 4, width=8)
 
-        buttons = ttk.Frame(frame)
+        buttons = ui.fr(frame)
         buttons.pack(fill=tk.X, pady=(0, 4))
-        ttk.Button(buttons, text="Создать траекторию", command=self._create_trajectory).pack(
+        ui.bn(buttons, text="Создать траекторию", command=self._create_trajectory).pack(
             side=tk.LEFT, padx=(0, 8)
         )
-        self.move_pose_button = ttk.Button(
+        self.move_pose_button = ui.bn(
             buttons,
             text="Переместить по 6D позе",
             command=self._move_by_fixture_pose,
             state=tk.DISABLED,
         )
         self.move_pose_button.pack(side=tk.LEFT, padx=(0, 8))
-        self.export_step_button = ttk.Button(
+        self.export_step_button = ui.bn(
             buttons, text="Экспорт STEP", command=self._export_step, state=tk.DISABLED
         )
         self.export_step_button.pack(side=tk.LEFT, padx=(0, 8))
-        self.export_robot_button = ttk.Button(
+        self.export_robot_button = ui.bn(
             buttons, text="Создать УП", command=self._export_robot, state=tk.DISABLED
         )
         self.export_robot_button.pack(side=tk.LEFT, padx=(0, 8))
-        ttk.Label(buttons, text="Lcorr (мм):").pack(side=tk.LEFT, padx=(0, 4))
-        ttk.Entry(buttons, textvariable=self.lcorr_var, width=6).pack(side=tk.LEFT, padx=(0, 8))
-        self.wrist_correction_button = ttk.Button(
+        ui.lb(buttons, text="Lcorr (мм):").pack(side=tk.LEFT, padx=(0, 4))
+        ui.en(buttons, textvariable=self.lcorr_var, width=6).pack(side=tk.LEFT, padx=(0, 8))
+        self.wrist_correction_button = ui.bn(
             buttons,
             text="Коррекция запястья",
             command=self._apply_wrist_correction,
             state=tk.DISABLED,
         )
         self.wrist_correction_button.pack(side=tk.LEFT)
-        ttk.Label(frame, textvariable=self.status_var).pack(anchor=tk.W)
+        ui.lb(frame, textvariable=self.status_var).pack(anchor=tk.W)
 
     def _build_midpoint_block(
         self,
@@ -238,7 +240,7 @@ class CylinderWallSection:
         radial_var: tk.StringVar,
         tilt_var: tk.StringVar,
     ) -> None:
-        block = ttk.LabelFrame(parent, text=title, padding=6)
+        block = self.ui.lf(parent, title, padding=6)
         block.grid(row=0, column=column, sticky=tk.NSEW, padx=(0 if column == 0 else 4, 0))
         self._add_labeled_entry(block, 0, "Вниз (мм):", down_var, entry_width=8)
         self._add_labeled_entry(block, 1, "К оси (мм):", radial_var, entry_width=8)
@@ -252,10 +254,10 @@ class CylinderWallSection:
         column: int,
         width: int = 10,
     ) -> None:
-        ttk.Label(parent, text=label).grid(
+        self.ui.lb(parent, text=label).grid(
             row=0, column=column, sticky=tk.W, padx=(0 if column == 0 else 8, 4)
         )
-        ttk.Entry(parent, textvariable=variable, width=width).grid(
+        self.ui.en(parent, textvariable=variable, width=width).grid(
             row=0, column=column + 1, sticky=tk.W
         )
 
@@ -267,8 +269,8 @@ class CylinderWallSection:
         variable: tk.StringVar,
         entry_width: int = 12,
     ) -> None:
-        ttk.Label(parent, text=label).grid(row=row, column=0, sticky=tk.W, pady=2)
-        ttk.Entry(parent, textvariable=variable, width=entry_width).grid(
+        self.ui.lb(parent, text=label).grid(row=row, column=0, sticky=tk.W, pady=2)
+        self.ui.en(parent, textvariable=variable, width=entry_width).grid(
             row=row, column=1, sticky=tk.W, padx=(8, 0), pady=2
         )
 
@@ -646,6 +648,17 @@ class CylinderWallSection:
             return
 
         project_root = Path(__file__).resolve().parents[3]
+        default_up_dir = project_root / "УП"
+        up_path = filedialog.asksaveasfilename(
+            title="Сохранить УП — коррекция запястья",
+            defaultextension=".txt",
+            filetypes=[("УП Elite", "*.txt"), ("All files", "*.*")],
+            initialdir=str(default_up_dir) if default_up_dir.is_dir() else str(project_root),
+            initialfile="cylinder_wall_wrist_corrected.txt",
+        )
+        if not up_path:
+            return
+
         try:
             lcorr_mm = parse_float(self.lcorr_var.get(), "Lcorr")
             outputs = run_cylinder_wrist_correction(
@@ -653,6 +666,7 @@ class CylinderWallSection:
                 trajectory=trajectory,
                 robot_settings=self.app.form_common.robot_export_settings(),
                 lcorr_mm=lcorr_mm,
+                output_up_path=Path(up_path),
             )
         except Exception as error:
             messagebox.showerror("Коррекция запястья", str(error))

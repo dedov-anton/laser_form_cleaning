@@ -44,11 +44,10 @@ def export_ring_arc_program(
     inner_radius_mm: float,
     ring_width_mm: float,
     beam_width_mm: float,
-    start_point_mm: Point3,
-    finish_point_mm: Point3,
     filepath: Path,
     settings: RobotExportSettings | None = None,
     generator_id: str = "bottom_ring",
+    local_z_mm: float = 0.0,
 ) -> None:
     if settings is None:
         settings = RobotExportSettings()
@@ -59,14 +58,13 @@ def export_ring_arc_program(
         ring_width_mm,
         beam_width_mm,
         generator_id=generator_id,
+        local_z_mm=local_z_mm,
     )
     plan = plan_arc_passes(inner_radius_mm, ring_width_mm, beam_width_mm)
     program = build_ring_arc_program(
         settings,
         geometry=geometry,
         pass_plan=plan,
-        start_point_mm=start_point_mm,
-        finish_point_mm=finish_point_mm,
     )
     filepath = Path(filepath)
     filepath.parent.mkdir(parents=True, exist_ok=True)

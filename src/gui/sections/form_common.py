@@ -5,10 +5,12 @@ from tkinter import filedialog, messagebox, ttk
 from typing import TYPE_CHECKING, Callable
 
 from src.common.frame_pose import FramePose6D
+from src.get_pose import get6dpose
 from src.common.project import DEFAULT_ROBOT_IP, DEFAULT_TOOL_MOUNT_ROTATION_DEG
 from src.exporters.robot.settings import RobotExportSettings
 from src.exporters.robot.upload import send_program_file_to_robot
 from src.gui.parsing import format_number, parse_float
+from src.gui.section_styles import SectionUI
 
 if TYPE_CHECKING:
     from src.gui.app import TrajectoryApp
@@ -29,39 +31,41 @@ class FormCommonSection:
         self.robot_acceleration_var = tk.StringVar(value="0.05")
         self.robot_ip_var = tk.StringVar(value=DEFAULT_ROBOT_IP)
         self.tool_mount_rotation_var = tk.StringVar(value=str(DEFAULT_TOOL_MOUNT_ROTATION_DEG))
+        self.ui = SectionUI("form_common")
         self._build(parent)
 
     def _build(self, parent: ttk.Frame) -> None:
-        frame = ttk.LabelFrame(parent, text="Общие параметры формы", padding=8)
+        ui = self.ui
+        frame = ui.lf(parent, "Общие параметры формы")
         frame.pack(fill=tk.X, pady=(0, 8))
 
-        row = ttk.Frame(frame)
+        row = ui.fr(frame)
         row.pack(fill=tk.X, pady=2)
-        ttk.Label(row, text="Ширина луча (мм):").pack(side=tk.LEFT)
-        ttk.Entry(row, textvariable=self.beam_width_var, width=10).pack(side=tk.LEFT, padx=(8, 24))
-        ttk.Label(row, text="(общая для всех поверхностей)").pack(side=tk.LEFT)
+        ui.lb(row, text="Ширина луча (мм):").pack(side=tk.LEFT)
+        ui.en(row, textvariable=self.beam_width_var, width=10).pack(side=tk.LEFT, padx=(8, 24))
+        ui.lb(row, text="(общая для всех поверхностей)").pack(side=tk.LEFT)
 
-        robot = ttk.LabelFrame(frame, text="Параметры УП (Elite)", padding=6)
+        robot = ui.lf(frame, "Параметры УП (Elite)", padding=6)
         robot.pack(fill=tk.X, pady=(8, 0))
-        robot_row = ttk.Frame(robot)
+        robot_row = ui.fr(robot)
         robot_row.pack(fill=tk.X, pady=2)
         self._inline(robot_row, "Blend (м):", self.robot_blend_var, 0, width=8)
         self._inline(robot_row, "v (м/с):", self.robot_velocity_var, 2, width=8)
         self._inline(robot_row, "a (м/с²):", self.robot_acceleration_var, 4, width=8)
         self._inline(robot_row, "Крепление (°):", self.tool_mount_rotation_var, 6, width=8)
 
-        robot_send_row = ttk.Frame(robot)
+        robot_send_row = ui.fr(robot)
         robot_send_row.pack(fill=tk.X, pady=(6, 2))
         self._inline(robot_send_row, "IP робота:", self.robot_ip_var, 0, width=14)
-        ttk.Button(
+        ui.bn(
             robot_send_row,
             text="Отправить в робот УП",
             command=self._send_program_to_robot,
         ).grid(row=0, column=2, sticky=tk.W, padx=(16, 0))
 
-        fixture = ttk.LabelFrame(frame, text="Поза матрицы / базы (мм, °)", padding=6)
+        fixture = ui.lf(frame, "Поза матрицы / базы (мм, °)", padding=6)
         fixture.pack(fill=tk.X, pady=(8, 0))
-        pose_row = ttk.Frame(fixture)
+        pose_row = ui.fr(fixture)
         pose_row.pack(fill=tk.X, pady=2)
         self._inline(pose_row, "X:", self.fixture_x_var, 0)
         self._inline(pose_row, "Y:", self.fixture_y_var, 2)
@@ -69,7 +73,12 @@ class FormCommonSection:
         self._inline(pose_row, "Rx:", self.fixture_rx_var, 6)
         self._inline(pose_row, "Ry:", self.fixture_ry_var, 8)
         self._inline(pose_row, "Rz:", self.fixture_rz_var, 10)
-        ttk.Label(
+        ui.bn(
+            pose_row,
+            text="Получить позу",
+            command=self._apply_pose_from_device,
+        ).grid(row=0, column=12, sticky=tk.W, padx=(12, 0))
+        ui.lb(
             fixture,
             text="Static XYZ (Elite): Rx→Ry→Rz вокруг фикс. осей. «Переместить» — перенос локальной траектории.",
             wraplength=760,
@@ -83,10 +92,10 @@ class FormCommonSection:
         column: int,
         width: int = 8,
     ) -> None:
-        ttk.Label(parent, text=label).grid(
+        self.ui.lb(parent, text=label).grid(
             row=0, column=column, sticky=tk.W, padx=(0 if column == 0 else 8, 4)
         )
-        ttk.Entry(parent, textvariable=variable, width=width).grid(
+        self.ui.en(parent, textvariable=variable, width=width).grid(
             row=0, column=column + 1, sticky=tk.W
         )
 
@@ -132,6 +141,18 @@ class FormCommonSection:
 
     def robot_ip(self) -> str:
         return self.robot_ip_var.get().strip()
+
+    def _apply_pose_from_device(self) -> None:
+        try:
+            x_mm, y_mm, z_mm, rx_deg, ry_deg, rz_deg = get6dpose()
+            self.fixture_x_var.set(format_number(x_mm))
+            self.fixture_y_var.set(format_number(y_mm))
+            self.fixture_z_var.set(format_number(z_mm))
+            self.fixture_rx_var.set(format_number(rx_deg))
+            self.fixture_ry_var.set(format_number(ry_deg))
+            self.fixture_rz_var.set(format_number(rz_deg))
+        except Exception as error:
+            messagebox.showerror("Получить позу", str(error))
 
     def _send_program_to_robot(self) -> None:
         filepath = filedialog.askopenfilename(

@@ -9,6 +9,7 @@ from src.exporters.robot.elite_program import (
     build_ring_movec_test_program,
 )
 from src.exporters.robot.ring_arc import (
+    build_ccw_semicircle_poses,
     build_cw_semicircle_poses,
     build_ring_arc_geometry,
     geometry_with_track_radius,
@@ -107,18 +108,50 @@ class RingMovecTests(unittest.TestCase):
         self.assertGreater(plan.overlap_mm, 0.0)
         self.assertEqual(len(plan.radii_mm), 3)
 
-    def test_build_ring_arc_program_uses_explicit_start_finish(self) -> None:
+    def test_build_ring_arc_program_start_finish_match_first_last_move(self) -> None:
         geometry = ring_arc_geometry_from_trajectory(self.trajectory)
         plan = plan_arc_passes(200.0, 100.0, 100.0)
         program = build_ring_arc_program(
             self.settings,
             geometry=geometry,
             pass_plan=plan,
-            start_point_mm=(111.0, 222.0, 333.0),
-            finish_point_mm=(444.0, 555.0, 666.0),
         )
-        self.assertIn("pose_start = [0.1110, 0.2220, 0.3330", program)
-        self.assertIn("pose_finish = [0.4440, 0.5550, 0.6660", program)
+        first_start, _, _ = build_cw_semicircle_poses(
+            geometry_with_track_radius(geometry, plan.radii_mm[0]),
+            180.0,
+            90.0,
+            0.0,
+        )
+        _, _, last_end = build_ccw_semicircle_poses(
+            geometry_with_track_radius(geometry, plan.radii_mm[-1]),
+            180.0,
+            270.0,
+            0.0,
+        )
+        start_m = tuple(value / 1000.0 for value in first_start.position)
+        finish_m = tuple(value / 1000.0 for value in last_end.position)
+        self.assertIn(
+            f"pose_start = [{start_m[0]:.4f}, {start_m[1]:.4f}, {start_m[2]:.4f}",
+            program,
+        )
+        self.assertIn(
+            f"pose_finish = [{finish_m[0]:.4f}, {finish_m[1]:.4f}, {finish_m[2]:.4f}",
+            program,
+        )
+        self.assertIn("pose_track_0_cw_180 = [", program)
+        start_line = next(line for line in program.splitlines() if line.startswith(" pose_start"))
+        first_work_line = next(
+            line for line in program.splitlines() if line.startswith(" pose_track_0_cw_180")
+        )
+        finish_line = next(line for line in program.splitlines() if line.startswith(" pose_finish"))
+        last_track = plan.pass_count - 1
+        last_work_line = next(
+            line
+            for line in program.splitlines()
+            if line.startswith(f" pose_track_{last_track}_ccw_end_0")
+        )
+        self.assertEqual(start_line.split(" = ", 1)[1], first_work_line.split(" = ", 1)[1])
+        self.assertEqual(finish_line.split(" = ", 1)[1], last_work_line.split(" = ", 1)[1])
 
     def test_build_ring_arc_program_two_movec_per_track(self) -> None:
         plan = plan_arc_passes(200.0, 100.0, 50.0)

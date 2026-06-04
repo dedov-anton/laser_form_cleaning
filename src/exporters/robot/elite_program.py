@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from typing import List, Tuple
 
-from src.common.geometry import DEFAULT_TOOL_AXIS_Z, Point3, Pose6D
-from src.common.tool_orientation import orthogonal_tool_axis_x
+from src.common.geometry import Point3, Pose6D
 from src.common.trajectory import WorkTrajectory
 from src.exporters.robot.orientation import RollPitchYaw, pose_to_elite_rpy
 from src.exporters.robot.ring_arc import (
@@ -215,10 +214,20 @@ def _append_ccw_semicircle_movec(
     lines.append("\n")
 
 
-def _program_point_rpy(settings: RobotExportSettings) -> RollPitchYaw:
-    mount_rad = settings.tool_mount_rotation_rad
-    axis_x = orthogonal_tool_axis_x((1.0, 0.0, 0.0), DEFAULT_TOOL_AXIS_Z)
-    return pose_to_elite_rpy(DEFAULT_TOOL_AXIS_Z, axis_x, mount_rad)
+def _ring_arc_program_endpoints(
+    geometry: RingArcGeometry,
+    pass_plan: ArcPassPlan,
+) -> Tuple[Pose6D, Pose6D]:
+    """First CW start (180°) and last CCW end (0°) on outermost track."""
+    first_track = geometry_with_track_radius(geometry, pass_plan.radii_mm[0])
+    last_track = geometry_with_track_radius(geometry, pass_plan.radii_mm[-1])
+    program_start, _, _ = build_cw_semicircle_poses(
+        first_track, start_deg=180.0, via_deg=90.0, end_deg=0.0
+    )
+    _, _, program_finish = build_ccw_semicircle_poses(
+        last_track, start_deg=180.0, via_deg=270.0, end_deg=0.0
+    )
+    return program_start, program_finish
 
 
 def build_ring_arc_program(
@@ -226,12 +235,16 @@ def build_ring_arc_program(
     *,
     geometry: RingArcGeometry,
     pass_plan: ArcPassPlan,
-    start_point_mm: Point3,
-    finish_point_mm: Point3,
 ) -> str:
     """Full ring cleaning: for each track radius, CW semicircle then CCW semicircle (movec)."""
     mount_rad = settings.tool_mount_rotation_rad
-    program_rpy = _program_point_rpy(settings)
+    program_start, program_finish = _ring_arc_program_endpoints(geometry, pass_plan)
+    start_rpy = pose_to_elite_rpy(
+        program_start.tool_axis_z, program_start.tool_axis_x, mount_rad
+    )
+    finish_rpy = pose_to_elite_rpy(
+        program_finish.tool_axis_z, program_finish.tool_axis_x, mount_rad
+    )
 
     cx, cy = geometry.center_xy
     radii_text = ", ".join(f"{radius:.2f}" for radius in pass_plan.radii_mm)
@@ -244,7 +257,7 @@ def build_ring_arc_program(
         "def welding_program():\n",
     ]
 
-    lines.append(_format_pose("start", _mm_to_m(start_point_mm), program_rpy))
+    lines.append(_format_pose("start", _mm_to_m(program_start.position), start_rpy))
     lines.append(_format_movel("start", settings, 0.0))
     lines.append("\n")
 
@@ -254,7 +267,7 @@ def build_ring_arc_program(
         _append_cw_semicircle_movec(lines, track_geometry, settings, mount_rad, prefix)
         _append_ccw_semicircle_movec(lines, track_geometry, settings, mount_rad, prefix)
 
-    lines.append(_format_pose("finish", _mm_to_m(finish_point_mm), program_rpy))
+    lines.append(_format_pose("finish", _mm_to_m(program_finish.position), finish_rpy))
     lines.append(_format_movel("finish", settings, 0.0))
     lines.append("end\n")
     return "".join(lines)
@@ -266,16 +279,12 @@ def build_ring_arc_program_from_trajectory(
     *,
     geometry: RingArcGeometry | None = None,
     pass_plan: ArcPassPlan | None = None,
-    start_point_mm: Point3 | None = None,
-    finish_point_mm: Point3 | None = None,
 ) -> str:
-    """Build arc program from trajectory (tests); start/finish default to trajectory fields."""
+    """Build arc program from trajectory (tests)."""
     base_geometry = geometry or ring_arc_geometry_from_trajectory(trajectory)
     plan = pass_plan or plan_arc_passes_from_trajectory(trajectory)
     return build_ring_arc_program(
         settings,
         geometry=base_geometry,
         pass_plan=plan,
-        start_point_mm=start_point_mm or trajectory.start_point_mm,
-        finish_point_mm=finish_point_mm or trajectory.finish_point_mm,
     )

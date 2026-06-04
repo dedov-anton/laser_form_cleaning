@@ -7,10 +7,15 @@ from src.generators.top_ring.params import TopRingParams
 
 class TopRingGenerator:
     generator_id = "top_ring"
-    generator_version = "0.0"
+    generator_version = "0.1"
 
     def validate_params(self, params: TopRingParams) -> None:
-        raise NotImplementedError("Генератор верхнего кольца — в разработке")
+        if params.inner_radius_mm <= 0.0:
+            raise ValueError("inner_radius_mm must be positive")
+        if params.ring_width_mm <= 0.0:
+            raise ValueError("ring_width_mm must be positive")
+        if params.beam_width_mm <= 0.0:
+            raise ValueError("beam_width_mm must be positive")
 
     def build(
         self,
@@ -19,4 +24,6 @@ class TopRingGenerator:
         start_mm: Point3,
         finish_mm: Point3,
     ) -> WorkTrajectory:
-        raise NotImplementedError("Гenerator верхнего кольца — в разработке")
+        raise NotImplementedError(
+            "Генератор верхнего кольца: используйте «Создать УП дугами» (радиальная траектория не реализована)"
+        )

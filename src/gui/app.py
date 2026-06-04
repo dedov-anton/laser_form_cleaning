@@ -10,6 +10,7 @@ from src.common.trajectory import WorkTrajectory
 from src.gui.sections.bottom_ring import BottomRingSection
 from src.gui.sections.cylinder_wall import CylinderWallSection
 from src.gui.sections.form_common import FormCommonSection
+from src.gui.section_styles import setup_section_styles
 from src.gui.sections.top_ring import TopRingSection
 from src.storage.project_store import (
     load_local_trajectory,
@@ -33,6 +34,7 @@ class TrajectoryApp(tk.Tk):
         self._local_trajectories: dict[str, WorkTrajectory] = {}
         self._load_stored_trajectories()
 
+        setup_section_styles(self)
         self._build_ui()
         self._load_sections()
         self._bind_updates()
@@ -52,7 +54,7 @@ class TrajectoryApp(tk.Tk):
         scroll_container = ttk.Frame(self, padding=(10, 10, 10, 10))
         scroll_container.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        canvas = tk.Canvas(scroll_container, highlightthickness=0)
+        canvas = tk.Canvas(scroll_container, highlightthickness=0, bg="#F5F5F5")
         self._scroll_canvas = canvas
         scrollbar = ttk.Scrollbar(scroll_container, orient=tk.VERTICAL, command=canvas.yview)
         canvas.configure(yscrollcommand=scrollbar.set)
@@ -85,11 +87,13 @@ class TrajectoryApp(tk.Tk):
         def on_change() -> None:
             self.bottom_ring._update_derived_fields()
             self.bottom_ring._update_profile_preview()
+            self.top_ring._update_derived_fields()
             self.cylinder_wall._update_derived_fields()
             self.cylinder_wall._update_profile_preview()
 
         self.form_common.bind_updates(on_change)
         self.bottom_ring.bind_updates(on_change)
+        self.top_ring.bind_updates(on_change)
         self.cylinder_wall.bind_updates(on_change)
 
     def _on_mousewheel(self, event: tk.Event) -> None:

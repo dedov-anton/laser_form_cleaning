@@ -25,6 +25,7 @@ from src.gui.parsing import (
     parse_positive_int,
     parse_tilt_deg,
 )
+from src.gui.section_styles import SectionUI
 from src.gui.widgets.profile_canvas import ProfileCanvas
 from src.storage.project_store import store_local_trajectory, store_trajectory
 from src.transforms.trajectory_transform import (
@@ -65,69 +66,71 @@ class BottomRingSection:
         self.finish_x_var = tk.StringVar(value="0")
         self.finish_y_var = tk.StringVar(value="0")
         self.finish_z_var = tk.StringVar(value="0")
+        self.ui = SectionUI("bottom_ring")
         self._build(parent)
 
     def _build(self, parent: ttk.Frame) -> None:
-        frame = ttk.LabelFrame(parent, text="Низ формы (кольцо)", padding=8)
+        ui = self.ui
+        frame = ui.lf(parent, "Низ формы (кольцо)")
         frame.pack(fill=tk.X, pady=(0, 8))
 
-        top_row = ttk.Frame(frame)
+        top_row = ui.fr(frame)
         top_row.pack(fill=tk.X, pady=(0, 8))
         top_row.columnconfigure(0, weight=1)
         top_row.columnconfigure(1, weight=1)
 
-        ring_frame = ttk.LabelFrame(top_row, text="Параметры кольца", padding=8)
+        ring_frame = ui.lf(top_row, "Параметры кольца")
         ring_frame.grid(row=0, column=0, sticky=tk.NSEW, padx=(0, 4))
         self._add_labeled_entry(ring_frame, 0, "Внутренний радиус (мм):", self.inner_radius_var)
         self._add_labeled_entry(ring_frame, 1, "Ширина кольца (мм):", self.ring_width_var)
         self._add_readonly_row(ring_frame, 2, "Внешний радиус (мм):", self.outer_radius_var)
 
-        clean_frame = ttk.LabelFrame(top_row, text="Параметры чистки", padding=8)
+        clean_frame = ui.lf(top_row, "Параметры чистки")
         clean_frame.grid(row=0, column=1, sticky=tk.NSEW, padx=(4, 0))
-        sector_row = ttk.Frame(clean_frame)
+        sector_row = ui.fr(clean_frame)
         sector_row.grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=4)
-        ttk.Label(sector_row, text="Кол-во секторов:").pack(side=tk.LEFT)
-        ttk.Entry(sector_row, textvariable=self.sector_count_var, width=10).pack(
+        ui.lb(sector_row, text="Кол-во секторов:").pack(side=tk.LEFT)
+        ui.en(sector_row, textvariable=self.sector_count_var, width=10).pack(
             side=tk.LEFT, padx=(8, 4)
         )
-        ttk.Button(sector_row, text="↻ авто", command=self._apply_recommended_sectors).pack(
+        ui.bn(sector_row, text="↻ авто", command=self._apply_recommended_sectors).pack(
             side=tk.LEFT
         )
-        self.overlap_outer_label = ttk.Label(clean_frame, textvariable=self.overlap_outer_var)
+        self.overlap_outer_label = ui.lb(clean_frame, textvariable=self.overlap_outer_var)
         self.overlap_outer_label.grid(row=1, column=0, columnspan=2, sticky=tk.W, pady=2)
-        ttk.Label(clean_frame, textvariable=self.overlap_inner_var).grid(
+        ui.lb(clean_frame, textvariable=self.overlap_inner_var).grid(
             row=2, column=0, columnspan=2, sticky=tk.W, pady=2
         )
-        self.arc_pass_label = ttk.Label(clean_frame, textvariable=self.arc_pass_var)
+        self.arc_pass_label = ui.lb(clean_frame, textvariable=self.arc_pass_var)
         self.arc_pass_label.grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=2)
 
-        entry_frame = ttk.LabelFrame(frame, text="Сектор O→I (° 0–360)", padding=8)
+        entry_frame = ui.lf(frame, "Сектор O→I (° 0–360)")
         entry_frame.pack(fill=tk.X, pady=(0, 8))
-        sector_fields = ttk.Frame(entry_frame)
+        sector_fields = ui.fr(entry_frame)
         sector_fields.pack(fill=tk.X)
-        ttk.Label(sector_fields, text="Начало:").pack(side=tk.LEFT)
-        ttk.Entry(sector_fields, textvariable=self.entry_sector_start_var, width=10).pack(
+        ui.lb(sector_fields, text="Начало:").pack(side=tk.LEFT)
+        ui.en(sector_fields, textvariable=self.entry_sector_start_var, width=10).pack(
             side=tk.LEFT, padx=(6, 16)
         )
-        ttk.Label(sector_fields, text="Конец:").pack(side=tk.LEFT)
-        ttk.Entry(sector_fields, textvariable=self.entry_sector_end_var, width=10).pack(
+        ui.lb(sector_fields, text="Конец:").pack(side=tk.LEFT)
+        ui.en(sector_fields, textvariable=self.entry_sector_end_var, width=10).pack(
             side=tk.LEFT, padx=(6, 0)
         )
 
-        profile_frame = ttk.LabelFrame(frame, text="Профиль / наклон Z", padding=8)
+        profile_frame = ui.lf(frame, "Профиль / наклон Z")
         profile_frame.pack(fill=tk.X, pady=(0, 8))
         profile_frame.columnconfigure(0, weight=1)
         profile_frame.columnconfigure(1, weight=0)
 
-        fields = ttk.Frame(profile_frame)
+        fields = ui.fr(profile_frame)
         fields.grid(row=0, column=0, sticky=tk.NSEW, padx=(0, 8))
 
-        edges = ttk.Frame(fields)
+        edges = ui.fr(fields)
         edges.pack(fill=tk.X, pady=(0, 6))
         self._add_inline_field(edges, "Внутр. наклон (°):", self.inner_tilt_var, 0)
         self._add_inline_field(edges, "Внеш. наклон (°):", self.outer_tilt_var, 2)
 
-        mid_row = ttk.Frame(fields)
+        mid_row = ui.fr(fields)
         mid_row.pack(fill=tk.X)
         mid_row.columnconfigure(0, weight=1)
         mid_row.columnconfigure(1, weight=1)
@@ -137,64 +140,63 @@ class BottomRingSection:
         self._build_midpoint_block(
             mid_row, 1, "Промеж. 2", self.profile2_dist_var, self.profile2_z_var, self.profile2_tilt_var
         )
-        ttk.Label(
+        ui.lb(
             fields,
             text="+ — к внутр. радиусу, − — наружу. Dist=0 — точка выкл.",
             wraplength=420,
         ).pack(anchor=tk.W, pady=(6, 0))
 
-        preview_frame = ttk.Frame(profile_frame)
+        preview_frame = ui.fr(profile_frame)
         preview_frame.grid(row=0, column=1, sticky=tk.N)
-        ttk.Label(preview_frame, text="Сечение профиля").pack(anchor=tk.W)
+        ui.lb(preview_frame, text="Сечение профиля").pack(anchor=tk.W)
         self.profile_canvas = ProfileCanvas(preview_frame)
         self.profile_canvas.pack()
         self.profile_canvas.bind("<Configure>", lambda _e: self._update_profile_preview())
 
-        points_frame = ttk.LabelFrame(
+        points_frame = ui.lf(
             frame,
-            text="Старт / финиш (мм) — координаты УП, без переноса по 6D позе",
-            padding=8,
+            "Старт / финиш (мм) — координаты УП, без переноса по 6D позе",
         )
         points_frame.pack(fill=tk.X, pady=(0, 8))
-        start_row = ttk.Frame(points_frame)
+        start_row = ui.fr(points_frame)
         start_row.pack(fill=tk.X, pady=2)
         self._add_inline_field(start_row, "Старт X:", self.start_x_var, 0, width=8)
         self._add_inline_field(start_row, "Y:", self.start_y_var, 2, width=8)
         self._add_inline_field(start_row, "Z:", self.start_z_var, 4, width=8)
-        finish_row = ttk.Frame(points_frame)
+        finish_row = ui.fr(points_frame)
         finish_row.pack(fill=tk.X, pady=2)
         self._add_inline_field(finish_row, "Финиш X:", self.finish_x_var, 0, width=8)
         self._add_inline_field(finish_row, "Y:", self.finish_y_var, 2, width=8)
         self._add_inline_field(finish_row, "Z:", self.finish_z_var, 4, width=8)
 
-        buttons = ttk.Frame(frame)
+        buttons = ui.fr(frame)
         buttons.pack(fill=tk.X, pady=(0, 4))
-        ttk.Button(buttons, text="Создать траекторию", command=self._create_trajectory).pack(
+        ui.bn(buttons, text="Создать траекторию", command=self._create_trajectory).pack(
             side=tk.LEFT, padx=(0, 8)
         )
-        self.move_pose_button = ttk.Button(
+        self.move_pose_button = ui.bn(
             buttons,
             text="Переместить по 6D позе",
             command=self._move_by_fixture_pose,
             state=tk.DISABLED,
         )
         self.move_pose_button.pack(side=tk.LEFT, padx=(0, 8))
-        self.export_step_button = ttk.Button(
+        self.export_step_button = ui.bn(
             buttons, text="Экспорт STEP", command=self._export_step, state=tk.DISABLED
         )
         self.export_step_button.pack(side=tk.LEFT, padx=(0, 8))
-        self.export_robot_button = ttk.Button(
+        self.export_robot_button = ui.bn(
             buttons, text="Создать УП", command=self._export_robot, state=tk.DISABLED
         )
         self.export_robot_button.pack(side=tk.LEFT, padx=(0, 8))
-        self.export_robot_arc_button = ttk.Button(
+        self.export_robot_arc_button = ui.bn(
             buttons,
             text="Создать УП дугами",
             command=self._export_robot_arc,
             state=tk.DISABLED,
         )
         self.export_robot_arc_button.pack(side=tk.LEFT)
-        ttk.Label(frame, textvariable=self.status_var).pack(anchor=tk.W)
+        ui.lb(frame, textvariable=self.status_var).pack(anchor=tk.W)
 
     def _build_midpoint_block(
         self,
@@ -205,7 +207,7 @@ class BottomRingSection:
         z_var: tk.StringVar,
         tilt_var: tk.StringVar,
     ) -> None:
-        block = ttk.LabelFrame(parent, text=title, padding=6)
+        block = self.ui.lf(parent, title, padding=6)
         block.grid(row=0, column=column, sticky=tk.NSEW, padx=(0 if column == 0 else 4, 0))
         self._add_labeled_entry(block, 0, "От внеш. (мм):", dist_var, entry_width=8)
         self._add_labeled_entry(block, 1, "Z (мм):", z_var, entry_width=8)
@@ -219,10 +221,10 @@ class BottomRingSection:
         column: int,
         width: int = 10,
     ) -> None:
-        ttk.Label(parent, text=label).grid(
+        self.ui.lb(parent, text=label).grid(
             row=0, column=column, sticky=tk.W, padx=(0 if column == 0 else 8, 4)
         )
-        ttk.Entry(parent, textvariable=variable, width=width).grid(
+        self.ui.en(parent, textvariable=variable, width=width).grid(
             row=0, column=column + 1, sticky=tk.W
         )
 
@@ -234,16 +236,16 @@ class BottomRingSection:
         variable: tk.StringVar,
         entry_width: int = 12,
     ) -> None:
-        ttk.Label(parent, text=label).grid(row=row, column=0, sticky=tk.W, pady=2)
-        ttk.Entry(parent, textvariable=variable, width=entry_width).grid(
+        self.ui.lb(parent, text=label).grid(row=row, column=0, sticky=tk.W, pady=2)
+        self.ui.en(parent, textvariable=variable, width=entry_width).grid(
             row=row, column=1, sticky=tk.W, padx=(8, 0), pady=2
         )
 
     def _add_readonly_row(
         self, parent: ttk.Frame, row: int, label: str, variable: tk.StringVar
     ) -> None:
-        ttk.Label(parent, text=label).grid(row=row, column=0, sticky=tk.W, pady=2)
-        ttk.Label(parent, textvariable=variable).grid(
+        self.ui.lb(parent, text=label).grid(row=row, column=0, sticky=tk.W, pady=2)
+        self.ui.lb(parent, textvariable=variable).grid(
             row=row, column=1, sticky=tk.W, padx=(8, 0), pady=2
         )
 
@@ -651,7 +653,6 @@ class BottomRingSection:
 
         try:
             params = self._read_params(require_sector_count=False)
-            start_point, finish_point = self._read_trajectory_points()
             plan = plan_arc_passes(
                 params.inner_radius_mm,
                 params.ring_width_mm,
@@ -664,8 +665,6 @@ class BottomRingSection:
                 inner_radius_mm=params.inner_radius_mm,
                 ring_width_mm=params.ring_width_mm,
                 beam_width_mm=params.beam_width_mm,
-                start_point_mm=start_point,
-                finish_point_mm=finish_point,
                 filepath=Path(filepath),
                 settings=settings,
                 generator_id=self.generator_id,

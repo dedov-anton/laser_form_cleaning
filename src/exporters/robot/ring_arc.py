@@ -29,6 +29,10 @@ class RingArcGeometry:
     ring_width_mm: float
     beam_width_mm: float
     generator_id: str
+    local_z_mm: float = 0.0
+
+
+TOP_RING_TOOL_AXIS_Z_LOCAL: Point3 = (0.0, 0.0, 1.0)
 
 
 def polar_to_xy(radius_mm: float, angle_deg: float) -> Tuple[float, float]:
@@ -36,9 +40,15 @@ def polar_to_xy(radius_mm: float, angle_deg: float) -> Tuple[float, float]:
     return radius_mm * math.cos(angle_rad), radius_mm * math.sin(angle_rad)
 
 
-def _local_arc_point(radius_mm: float, angle_deg: float) -> Point3:
+def _local_arc_point(geometry: RingArcGeometry, radius_mm: float, angle_deg: float) -> Point3:
     local_x, local_y = polar_to_xy(radius_mm, angle_deg)
-    return (local_x, local_y, 0.0)
+    return (local_x, local_y, geometry.local_z_mm)
+
+
+def _default_tool_axis_z_local(geometry: RingArcGeometry) -> Point3:
+    if geometry.generator_id == "top_ring":
+        return TOP_RING_TOOL_AXIS_Z_LOCAL
+    return DEFAULT_TOOL_AXIS_Z
 
 
 def _geometry_rotation(geometry: RingArcGeometry):
@@ -73,21 +83,27 @@ def build_ring_arc_geometry(
     ring_width_mm: float,
     beam_width_mm: float,
     generator_id: str = "bottom_ring",
+    *,
+    local_z_mm: float = 0.0,
 ) -> RingArcGeometry:
     if inner_radius_mm <= 0.0 or ring_width_mm <= 0.0:
         raise ValueError("inner_radius_mm and ring_width_mm must be positive")
 
     rotation = rotation_matrix_sxyz(pose.rx_deg, pose.ry_deg, pose.rz_deg)
     origin_world = transform_point((0.0, 0.0, 0.0), rotation, pose.translation())
+    ring_plane_world = transform_point(
+        (0.0, 0.0, local_z_mm), rotation, pose.translation()
+    )
     return RingArcGeometry(
         frame_pose=pose,
         center_xy=(origin_world[0], origin_world[1]),
-        z_mm=origin_world[2],
+        z_mm=ring_plane_world[2],
         track_radius_mm=track_radius_mm(inner_radius_mm, ring_width_mm),
         inner_radius_mm=inner_radius_mm,
         ring_width_mm=ring_width_mm,
         beam_width_mm=beam_width_mm,
         generator_id=generator_id,
+        local_z_mm=local_z_mm,
     )
 
 
@@ -111,10 +127,12 @@ def _params_from_trajectory(trajectory: WorkTrajectory) -> dict:
         outer = float(metadata.get("outer_radius_mm", inner))
         ring_width = outer - inner
     beam = float(snapshot.get("beam_width_mm", metadata.get("beam_width_mm", 0.0)))
+    z_to_top = float(snapshot.get("z_to_top_mm", metadata.get("z_to_top_mm", 0.0)))
     return {
         "inner_radius_mm": inner,
         "ring_width_mm": ring_width,
         "beam_width_mm": beam,
+        "z_to_top_mm": z_to_top,
     }
 
 
@@ -215,12 +233,16 @@ def ring_arc_geometry_from_trajectory(trajectory: WorkTrajectory) -> RingArcGeom
             f"Ring arc export expects bottom_ring or top_ring, got {trajectory.generator_id!r}"
         )
     params = _params_from_trajectory(trajectory)
+    local_z_mm = (
+        params["z_to_top_mm"] if trajectory.generator_id == "top_ring" else 0.0
+    )
     return build_ring_arc_geometry(
         _frame_pose_from_trajectory(trajectory),
         params["inner_radius_mm"],
         params["ring_width_mm"],
         params["beam_width_mm"],
         generator_id=trajectory.generator_id,
+        local_z_mm=local_z_mm,
     )
 
 
@@ -231,12 +253,16 @@ def build_arc_pose(
     clockwise: bool,
     tool_axis_z: Optional[Point3] = None,
 ) -> Pose6D:
-    local_position = _local_arc_point(geometry.track_radius_mm, angle_deg)
+    local_position = _local_arc_point(geometry, geometry.track_radius_mm, angle_deg)
     position = _world_point(geometry, local_position)
     tangent_xy = tangent_cw_xy(angle_deg) if clockwise else tangent_ccw_xy(angle_deg)
     local_tangent: Point3 = (tangent_xy[0], tangent_xy[1], 0.0)
     world_tangent = _world_vector(geometry, local_tangent)
-    axis_z = tool_axis_z if tool_axis_z is not None else _world_vector(geometry, DEFAULT_TOOL_AXIS_Z)
+    axis_z = (
+        tool_axis_z
+        if tool_axis_z is not None
+        else _world_vector(geometry, _default_tool_axis_z_local(geometry))
+    )
     tool_axis_x = orthogonal_tool_axis_x(world_tangent, axis_z)
     return Pose6D(
         index=0,
